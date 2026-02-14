@@ -17,6 +17,10 @@ DATA_FILES = [
         'assets/icon_error.png',
         'assets/app_icon.icns.icns'
     ]),
+    ('assets/i18n', [
+        'assets/i18n/en.yaml',
+        'assets/i18n/ru.yaml',
+    ]),
 ]
 
 OPTIONS = {
