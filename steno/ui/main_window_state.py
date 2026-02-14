@@ -9,6 +9,88 @@ from steno.i18n import tr
 
 class MainWindowStateMixin:
     @objc.python_method
+    def _estimate_prompt_height(self):
+        minimum = 120.0
+        maximum = 320.0
+        try:
+            self.prompt_text.layoutManager().glyphRangeForTextContainer_(self.prompt_text.textContainer())
+            used = self.prompt_text.layoutManager().usedRectForTextContainer_(self.prompt_text.textContainer())
+            estimated = float(used.size.height) + 18.0
+            return max(minimum, min(maximum, estimated))
+        except Exception:
+            try:
+                text = str(self.prompt_text.string() or "")
+                lines = max(1, len(text.splitlines()))
+                estimated = 18.0 + lines * 18.0
+                return max(minimum, min(maximum, estimated))
+            except Exception:
+                return minimum
+
+    @objc.python_method
+    def _apply_dynamic_detail_layout(self, status):
+        root_w, root_h = self.content_view.bounds()[1]
+        content_w = max(320.0, root_w)
+        pad = 24.0
+        full_w = content_w - (pad * 2.0)
+        bottom_pad = 24.0
+
+        title_h = 28.0
+        files_h = 54.0
+        controls_h = 30.0
+        prompt_label_h = 24.0
+        hint_h = 18.0
+        info_h = 58.0
+
+        # Top-down flow layout to avoid \"nailed\" look.
+        cursor_top = root_h - 24.0
+
+        title_y = cursor_top - title_h
+        self.detail_title_label.setFrame_(((pad, title_y), (760.0, title_h)))
+        cursor_top = title_y - 10.0
+
+        files_y = cursor_top - files_h
+        self.files_label.setFrame_(((pad, files_y), (820.0, files_h)))
+        cursor_top = files_y
+
+        if status == "unprocessed":
+            # tighter gap between files and prompt
+            cursor_top -= 8.0
+            prompt_label_y = cursor_top - prompt_label_h
+            self.prompt_label.setFrame_(((pad, prompt_label_y), (260.0, prompt_label_h)))
+            cursor_top = prompt_label_y - 6.0
+
+            prompt_h = self._estimate_prompt_height()
+            prompt_y = cursor_top - prompt_h
+            self.prompt_scroll.setFrame_(((pad, prompt_y), (full_w, prompt_h)))
+            cursor_top = prompt_y - 4.0
+
+            hint_y = cursor_top - hint_h
+            self.prompt_hint_label.setFrame_(((pad, hint_y), (full_w, hint_h)))
+            cursor_top = hint_y - 8.0
+
+            # \"No protocol yet\" message area
+            protocol_y = cursor_top - info_h
+            self.protocol_scroll.setFrame_(((pad, protocol_y), (full_w, info_h)))
+            cursor_top = protocol_y - 8.0
+
+            # Process button below \"No protocol yet\" text
+            controls_y = max(bottom_pad, cursor_top - controls_h)
+            self.process_button.setFrame_(((pad, controls_y), (140.0, controls_h)))
+            self.loader.setFrame_(((pad + 150.0, controls_y + 3.0), (24.0, 24.0)))
+            self.copy_protocol_button.setFrame_(((pad, controls_y), (140.0, controls_h)))
+        else:
+            # tighter gap between files and controls
+            controls_y = cursor_top - 8.0 - controls_h
+            self.process_button.setFrame_(((pad, controls_y), (120.0, controls_h)))
+            self.copy_protocol_button.setFrame_(((pad, controls_y), (140.0, controls_h)))
+            self.loader.setFrame_(((pad + 132.0, controls_y + 3.0), (24.0, 24.0)))
+
+            # protocol starts right below controls (no excessive blank area)
+            protocol_top = controls_y - 8.0
+            protocol_h = max(120.0, protocol_top - bottom_pad)
+            self.protocol_scroll.setFrame_(((pad, bottom_pad), (full_w, protocol_h)))
+
+    @objc.python_method
     def refresh_all(self):
         self.refresh_from_state()
         self.refresh_file_lists()
@@ -116,6 +198,7 @@ class MainWindowStateMixin:
     @objc.python_method
     def refresh_detail_view(self):
         if not self.selected_recording:
+            self._apply_dynamic_detail_layout("none")
             self.detail_title_label.setStringValue_(tr("main.select_recording"))
             self.files_label.setStringValue_(tr("main.files_default"))
             self.process_button.setHidden_(True)
@@ -135,6 +218,16 @@ class MainWindowStateMixin:
         protocol_path = os.path.join(self.app.config["save_dir"], base + "_protocol.txt")
         status = self._status_for_recording(video_name)
         has_protocol = os.path.exists(protocol_path)
+
+        # Load draft/config prompt before layout so dynamic textarea height is based on actual text.
+        if status == "unprocessed" and self.prompt_loaded_for != video_name:
+            prompt_value = self.prompt_drafts.get(video_name)
+            if prompt_value is None:
+                prompt_value = self.app.config.get("prompt", "")
+            self.prompt_text.setString_(prompt_value)
+            self.prompt_loaded_for = video_name
+
+        self._apply_dynamic_detail_layout(status)
 
         display_name = self._display_meeting_name(video_name)
         self.detail_title_label.setStringValue_(display_name)
@@ -156,12 +249,6 @@ class MainWindowStateMixin:
             self.prompt_label.setHidden_(False)
             self.prompt_scroll.setHidden_(False)
             self.prompt_hint_label.setHidden_(False)
-            if self.prompt_loaded_for != video_name:
-                prompt_value = self.prompt_drafts.get(video_name)
-                if prompt_value is None:
-                    prompt_value = self.app.config.get("prompt", "")
-                self.prompt_text.setString_(prompt_value)
-                self.prompt_loaded_for = video_name
             self.loader.stopAnimation_(None)
         elif status == "recording":
             self.process_button.setHidden_(True)

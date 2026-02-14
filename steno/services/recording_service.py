@@ -35,9 +35,6 @@ class RecordingService:
             return
 
         if not self.app.is_recording:
-            if not self.app.config.get("api_key"):
-                rumps.alert(tr("record.api_key_required_title"), tr("record.api_key_required_body"))
-                return
             self.start_recording(sender)
         else:
             self.stop_recording(sender)
@@ -181,4 +178,3 @@ class RecordingService:
         # Даем время на закрытие файлов
         time.sleep(1.0)
         self.app.refresh_files_menus()
-

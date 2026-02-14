@@ -1,192 +1,174 @@
-# SPEC: Новый UI Steno в стиле ChatGPT for Mac
+# SPEC: Steno (Implemented)
 
-## 1. Цель
-Сделать новый основной интерфейс Steno в стиле ChatGPT для macOS:
-- двухпанельный layout (sidebar + основная область);
-- адаптивность при изменении размера окна;
-- фокус на списке записей и детальном экране выбранной записи;
-- сохранение текущей бизнес-логики записи/обработки;
-- исправление текущего UX-багa: элементы должны быть кликабельны, окно не должно перетаскиваться из любой точки.
+## 1. Scope
+This document describes what is currently implemented in the codebase after the UI/architecture refactor.
+It is based on:
+- current source code under `app.py`, `recorder.py`, `steno/*`;
+- implemented parts of earlier planning in previous `SPEC.md`.
 
-## 2. Ключевые UX-требования (обязательные)
-1. Слева `sidebar`, справа `content area`.
-2. Вверху окна должна быть иконка (toggle), которая открывает/закрывает sidebar.
-3. Вверху sidebar:
-- кнопка `Start Recording`;
-- индикатор записи (иконка-кружок).
-4. В свернутом sidebar отображаются только иконки (без текстов).
-5. Ниже в sidebar список записей (вместо текущего select `Recordings`):
-- вертикальный скроллящийся список;
-- клик по элементу открывает детали в правой панели.
-6. Для необработанных записей в списке показывается отдельная иконка статуса (например, `unprocessed`).
-7. Правая панель (детали выбранной записи) должна показывать:
-- название/имя записи;
-- связанные файлы (видео `.mp4` и аудио `_mic.m4a`);
-- активную кнопку `Process`, если запись еще не обработана;
-- loader во время обработки;
-- после обработки: текст протокола из соответствующего `_protocol.txt`.
-8. Внизу sidebar:
-- иконка настроек (шестеренка), по клику открывается popover/popup с настройками и Usage;
-- в самом низу — ссылка (не кнопка) `Made by Sergey Galay`.
-9. Окно должно корректно поддерживать resize.
-10. Убрать иконку приложения из верхнего toolbar/menu bar (status bar); приложение должно оставаться только с иконкой в Dock.
+## 2. Product Goals (Implemented)
+- Record meetings on macOS with separate media tracks:
+  - screen + system audio to `.mp4`;
+  - microphone audio to `_mic.m4a`.
+- Process recordings with Gemini-compatible API and generate `_protocol.txt`.
+- Provide a desktop UI to browse recordings, process selected items, and manage artifacts.
+- Support first-run permissions onboarding and bilingual UI (RU/EN).
 
-## 3. Проблемы текущей версии, которые нужно устранить
-1. "Ничего не кликается" — недопустимо. Все интерактивные элементы должны получать фокус и обрабатывать click.
-2. "Окно тянется drag-and-drop в любом месте" — поведение должно быть ограничено title bar/стандартной зоной перетаскивания.
-3. Текущий вид "аскетичный" — требуется более премиальный и продуктовый визуальный уровень в стиле ChatGPT desktop.
+## 3. Current Architecture
+- Coordinator:
+  - `app.py` (`RecorderApp`) controls app lifecycle, menus, timers, global state.
+- Services:
+  - `steno/services/permissions_service.py` (`PermissionManager`)
+  - `steno/services/recording_service.py` (`RecordingService`)
+  - `steno/services/processing_service.py` (`process_video_with_ai`)
+  - `steno/services/recordings_service.py` (`RecordingsService`)
+- UI:
+  - `steno/ui/permissions_window.py`
+  - `steno/ui/main_window.py` (selector-safe ObjC class wrapper)
+  - `steno/ui/main_window_view.py`
+  - `steno/ui/main_window_state.py`
+  - `steno/ui/main_window_actions.py`
+  - `steno/ui/menu_delegate.py`
+- Config/i18n:
+  - `steno/config.py`
+  - `steno/i18n.py`
+  - `assets/i18n/en.yaml`, `assets/i18n/ru.yaml`
 
-## 4. Информационная архитектура
-## 4.1 Sidebar
-Секции сверху вниз:
-1. `Top Controls`
-- Sidebar Toggle (в хедере окна, влияет на ширину sidebar).
-- `Start Recording` кнопка.
-- Recording status dot (`idle`, `recording`, `processing`, `error`).
+## 4. Functional Specification
 
-2. `Recordings List`
-- Список последних записей (`.mp4`, сортировка по дате изменения DESC).
-- Каждый item:
-  - title (имя записи);
-  - secondary meta (дата/время, опционально);
-  - status icon (unprocessed / processed / processing).
-- Выделение выбранного item.
-- Вертикальный scroll.
+### 4.1 First Launch and Permissions
+- On first launch, app runs one-time TCC reset for:
+  - `ScreenCapture`
+  - `Microphone`
+- State persisted in config:
+  - `permissions_reset_done`
+  - `permissions_onboarding_done`
+- Before onboarding completion, a dedicated permissions window is shown:
+  - separate status lines for screen and mic;
+  - separate request buttons;
+  - transition to main window only after both permissions are granted and both steps were requested.
+- On subsequent launches (without reinstall), reset is not repeated.
 
-3. `Bottom Controls`
-- Settings gear icon -> открывает popover.
-- Нижняя текстовая ссылка `Made by Sergey Galay`.
+### 4.2 Main Window
+- Two-panel layout:
+  - fixed-width sidebar (`300px`);
+  - adaptive content area.
+- Sidebar contains:
+  - Start/Stop button;
+  - circular state indicator aligned with button;
+  - recordings table;
+  - settings button;
+  - "Made by Sergey Galay" link.
+- Content area contains:
+  - selected meeting title;
+  - files line (`Video: ...`, `Audio: ...`), video includes `.mp4`;
+  - `Process` button;
+  - `Copy` protocol button;
+  - loader;
+  - editable system prompt text area for unprocessed recordings;
+  - protocol text view.
 
-## 4.2 Content Area (правая часть)
-Состояния:
-1. `Empty state` (ничего не выбрано).
-2. `Record details` (выбрана запись, не в обработке).
-3. `Processing state` (loader + disabled actions).
-4. `Protocol state` (отображение текста `_protocol.txt`).
+### 4.3 Recording Lifecycle
+- `Start` validates:
+  - onboarding completion;
+  - no active processing conflict;
+  - API key present;
+  - permissions granted.
+- Capture files naming:
+  - `Meet_DD.MM.YYYY_HH:MM:SS.mp4`
+  - `Meet_DD.MM.YYYY_HH:MM:SS_mic.m4a`
+- Uses `ScreenRecorder` (`recorder.py`) with dual writers.
+- Includes start timeout watchdog (15s) with user alert.
+- `Stop` finalizes recording and refreshes UI/menu.
 
-Блоки контента:
-- Header с названием выбранной записи.
-- Блок файлов:
-  - `Video file: <name>.mp4`
-  - `Mic file: <name>_mic.m4a` (если найден)
-- Блок действия:
-  - `Process` (когда протокола нет)
-  - disabled/hidden при наличии протокола
-- Блок результата:
-  - scrollable text area с содержимым `_protocol.txt` после обработки.
+### 4.4 Processing Lifecycle
+- Triggered for selected unprocessed recording.
+- Uses per-recording prompt draft from UI (falls back to config prompt).
+- Uploads `.mp4` and optional `_mic.m4a` to Gemini files API.
+- Waits for file readiness; generates protocol with selected model.
+- Saves result to `<base>_protocol.txt`.
+- Tracks token usage in config:
+  - `last_request_tokens`
+  - `used_tokens`
+- UI status updates:
+  - processing state, loader, disabled actions, completion notification.
 
-## 5. Функциональные требования
-## 5.1 Sidebar Toggle
-1. Поддержка двух режимов:
-- Expanded: полные подписи + кнопки + список.
-- Collapsed: только иконки.
-2. Анимация переключения (короткая, нативная, не мешающая работе).
-3. Выбранная запись сохраняется при сворачивании/разворачивании.
+### 4.5 Recordings List and Statuses
+- Source: `save_dir`, `.mp4` only, sorted by mtime desc.
+- Status per item:
+  - `recording`
+  - `processing`
+  - `processed`
+  - `unprocessed`
+- Visual marker in list:
+  - blinking marker for actively recording item.
 
-## 5.2 Запись
-1. Нажатие `Start Recording`:
-- запускает текущую логику записи.
-- кнопка меняется на `Stop` во время записи.
-2. Индикатор записи:
-- `idle`: нейтральный;
-- `recording`: красный;
-- `processing`: оранжевый/спиннер;
-- `error`: warning.
+### 4.6 Recording Item Context Menu
+Implemented actions (right-click on list item):
+- Rename meeting:
+  - removes accidental `.mp4` suffix from entered title;
+  - renames linked files atomically when present (`.mp4`, `_mic.m4a`, `_protocol.txt`);
+  - guards against collisions and rollback on failure.
+- Archive:
+  - hides recording from list via `hidden_recordings` config;
+  - leaves files on disk.
+- Delete:
+  - removes `.mp4`, `_mic.m4a`, `_protocol.txt` with confirmation.
 
-## 5.3 Список записей
-1. Источник: папка `save_dir`.
-2. Отображать только `.mp4` как сущности списка.
-3. Для каждой записи вычислять статус:
-- `processed`, если существует `<base>_protocol.txt`;
-- `processing`, если активна обработка этой записи;
-- `unprocessed`, если протокола нет и не идет обработка.
-4. Клик по записи открывает details справа.
+### 4.7 Protocol Copy
+- For processed recordings, protocol can be copied to clipboard via `Copy` button.
 
-## 5.4 Экран деталей записи
-1. Показывать имена связанных файлов:
-- `<base>.mp4`
-- `<base>_mic.m4a` (если есть)
-2. Кнопка `Process`:
-- активна только если запись не обрабатывается и протокол еще не создан.
-3. Во время обработки:
-- показывать loader;
-- блокировать повторный запуск Process;
-- обновлять статус item в sidebar.
-4. После успешной обработки:
-- автоматически загрузить и показать текст протокола из `_protocol.txt`.
-5. При ошибке:
-- отображать понятный статус ошибки в content area + нотификацию.
+### 4.8 Settings
+Available in main-window popup and menu settings:
+- Video quality
+- AI model
+- Set API key
+- Set Base URL (fallback to default if empty)
+- Edit system prompt
+- Open output folder
+- Token usage display (read-only)
 
-## 5.5 Настройки
-1. Иконка шестеренки внизу sidebar открывает popover/popup.
-2. Попап содержит:
-- Video Quality;
-- AI Model;
-- Set API Key;
-- Edit Prompt;
-- Reset Permissions;
-- Reset Permissions + Restart;
-- Usage (`Last request`, `Used tokens`).
-3. Изменения применяются сразу и сохраняются в текущий конфиг.
+### 4.9 i18n
+- Locale auto-detection (NSLocale/env/locale fallback).
+- Supported languages:
+  - Russian (`ru`)
+  - English (`en`)
+- All major UI labels/messages are mapped through translation keys.
 
-## 6. Визуальные требования (премиальный стиль)
-1. Визуальная стилистика: близко к ChatGPT desktop для macOS (чистая иерархия, аккуратные отступы, спокойные тона, focus на контенте).
-2. Sidebar визуально отделен от контента (граница/материал/тон).
-3. Hover/selected состояния у элементов списка.
-4. Типографика:
-- четкая иерархия header/body/meta;
-- читаемый текст протокола в основном окне.
-5. Системный/нативный feel (без перегруженных эффектов).
+### 4.10 Menu Bar / Dock Behavior
+- App is Dock-visible (`LSUIElement=False`).
+- rumps status item is programmatically removed after startup (`hide_status_bar_item`).
 
-## 7. Resize и адаптивность
-1. Минимальный размер окна (чтобы элементы не ломались).
-2. При сужении:
-- sidebar может быть свернут;
-- контентная область остается рабочей и скроллится.
-3. Список записей и текст протокола должны быть в scrollable контейнерах.
+## 5. Data Contracts
+- Recording entity: `<base>.mp4`
+- Optional mic file: `<base>_mic.m4a`
+- Optional protocol file: `<base>_protocol.txt`
+- Config file: `~/.recorder_app_config.json`
 
-## 8. Состояния и переходы
-1. `App launched` -> sidebar + empty content.
-2. `Select recording` -> details state.
-3. `Process clicked` -> processing state.
-4. `Process success` -> protocol state.
-5. `Process fail` -> error state (с возможностью повторить).
-6. `Start Recording` / `Stop` обновляют глобальный статус и UI в обеих панелях.
+## 6. Non-Functional Requirements (Implemented)
+- Long operations are background-threaded (record start callbacks, permission refresh, AI processing).
+- UI refresh routed to main thread (`run_on_main`).
+- Errors surfaced via alerts/notifications and logs (`~/Library/Logs/Steno/app.log`).
 
-## 9. Данные и соответствие файлов
-1. Базовая сущность записи: `.mp4` файл.
-2. Связанный микрофон: `<base>_mic.m4a`.
-3. Связанный протокол: `<base>_protocol.txt`.
-4. Парсинг и связывание файлов должны быть устойчивы к отсутствию `_mic.m4a`.
+## 7. Build and Packaging
+- Entrypoint: `app.py`
+- py2app config: `setup.py`
+- Data files include icons and i18n YAMLs.
+- Python packages included: `steno`, `steno.ui`, `steno.services`.
 
-## 10. Нефункциональные требования
-1. UI-операции должны выполняться в main thread.
-2. Долгие операции (AI processing) — в фоне.
-3. Никаких зависаний UI во время обработки.
-4. Стабильная работа при частом обновлении списка файлов.
+## 8. Backlog / Not Implemented from Earlier Plan
+These plan items are not implemented in current UI:
+- sidebar collapse/expand toggle with icon-only mode;
+- premium visual polish beyond native controls;
+- full removal of legacy permission-reset methods from code (methods exist, but reset options are removed from active settings UI paths).
 
-## 11. Ограничения реализации (для следующего этапа)
-1. Не ломать текущую рабочую бизнес-логику записи и AI.
-2. Сохранить текущие уведомления и файловые соглашения.
-3. Поддержать текущую сборку через py2app.
-4. Dock-иконка остается включенной (`LSUIElement=False`).
-5. Menu bar иконка (rumps status item) должна быть отключена в новой UI-версии.
-
-## 12. Критерии приемки (Acceptance Criteria)
-1. Все элементы UI кликабельны; нет глобального drag окна из любой точки.
-2. Есть sidebar с toggle-кнопкой (expanded/collapsed).
-3. В sidebar отображается scrollable список записей с иконками статуса.
-4. Клик по записи открывает справа детали и связанные файлы.
-5. Для необработанной записи видна активная кнопка `Process`.
-6. Во время обработки виден loader и блокировка повторного запуска.
-7. После обработки показывается текст `_protocol.txt` прямо в правой панели.
-8. Настройки открываются из шестеренки внизу sidebar в popover/popup и содержат Usage.
-9. Внизу sidebar есть текстовая ссылка `Made by Sergey Galay`.
-10. UI корректно работает при resize окна.
-11. В верхней панели macOS (menu bar) нет иконки Steno, иконка есть только в Dock.
-
-## 13. Out of Scope (на текущую итерацию)
-1. Полный редизайн меню-бар части.
-2. Смена backend-моделей/протокола генерации.
-3. История версий протоколов внутри одной записи.
-4. Редактирование протокола прямо в приложении.
+## 9. Acceptance Snapshot (Current)
+Implemented and verified in code:
+- first-run explicit permissions flow;
+- responsive non-blocking windows;
+- recording and processing flows;
+- context menu actions for recordings;
+- editable per-recording prompt used as final `system_instruction`;
+- copy protocol action;
+- locale-based RU/EN UI;
+- modularized structure (`services`, `ui`, `config`, `i18n`).

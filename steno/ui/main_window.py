@@ -84,11 +84,5 @@ class MainWindowController(
     def onOpenOutput_(self, obj):
         return MainWindowActionsMixin.onOpenOutput_(self, obj)
 
-    def onResetPermissions_(self, obj):
-        return MainWindowActionsMixin.onResetPermissions_(self, obj)
-
-    def onResetPermissionsRestart_(self, obj):
-        return MainWindowActionsMixin.onResetPermissionsRestart_(self, obj)
-
     def onOpenLink_(self, obj):
         return MainWindowActionsMixin.onOpenLink_(self, obj)

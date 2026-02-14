@@ -12,7 +12,6 @@ import logging
 
 from steno.config import (
     AI_MODELS,
-    APP_BUNDLE_ID,
     DEFAULT_CONFIG,
     ICON_ERROR,
     ICON_IDLE,
@@ -27,7 +26,7 @@ from steno.services.processing_service import process_video_with_ai
 from steno.services.recording_service import RecordingService
 from steno.services.recordings_service import RecordingsService
 
-messageAuthor = 'v1.3'
+messageAuthor = 'v1.4'
 
 # --- macOS Permission & Native Capture Imports ---
 try:
@@ -57,7 +56,7 @@ try:
         NSViewHeightSizable, NSViewMinXMargin, NSViewMaxYMargin,
         NSViewMinYMargin, NSViewMaxXMargin
     )
-    from Foundation import NSObject, NSRunLoop, NSDate, NSBundle, NSIndexSet, NSThread, NSLocale
+    from Foundation import NSObject, NSRunLoop, NSDate, NSIndexSet, NSThread, NSLocale
     from PyObjCTools import AppHelper
     HAS_PYOBJC = True
 except ImportError as e:
@@ -141,54 +140,33 @@ class RecorderApp(rumps.App):
 
         logger.info("Steno initialized (Dual-Stream Mode)")
 
-    def _reset_permissions_first_launch_if_needed(self):
-        if self.config.get("permissions_reset_done", False):
-            return
-
-        logger.info("First launch detected. Scheduling one-time TCC permission reset.")
-
+    def _start_initial_ui_flow(self):
         def worker():
-            for service in ("ScreenCapture", "Microphone"):
-                try:
-                    result = subprocess.run(
-                        ["tccutil", "reset", service, APP_BUNDLE_ID],
-                        capture_output=True,
-                        text=True,
-                        timeout=8
-                    )
-                    if result.returncode != 0:
-                        details = (result.stderr or result.stdout or "Unknown error").strip()
-                        logger.warning(f"Permission reset failed for {service}: {details}")
-                except subprocess.TimeoutExpired:
-                    logger.warning(f"Permission reset timed out for {service}")
-                except Exception as e:
-                    logger.warning(f"Permission reset exception for {service}: {e}")
+            try:
+                screen_ok = self.permission_manager.is_screen_authorized()
+                mic_ok = self.permission_manager.is_mic_authorized()
+            except Exception:
+                logger.exception("Failed to preflight permissions")
+                screen_ok = False
+                mic_ok = False
 
-            self.config["permissions_reset_done"] = True
-            ConfigManager.save(self.config)
+            def apply_state():
+                if screen_ok and mic_ok:
+                    if not self.config.get("permissions_onboarding_done", False):
+                        self.config["permissions_onboarding_done"] = True
+                        ConfigManager.save(self.config)
+                    self.ensure_main_window()
+                    return
 
-            def on_done():
-                if self.permission_controller:
-                    self.permission_controller.set_bootstrap_state(
-                        True,
-                        tr("permissions.bootstrap_done")
-                    )
-            self.run_on_main(on_done)
+                logger.info("Required permissions are missing. Opening permissions window.")
+                if self.config.get("permissions_onboarding_done", False):
+                    self.config["permissions_onboarding_done"] = False
+                    ConfigManager.save(self.config)
+                self.show_permissions_window()
+
+            self.run_on_main(apply_state)
 
         threading.Thread(target=worker, daemon=True).start()
-
-    def _start_initial_ui_flow(self):
-        if self.config.get("permissions_onboarding_done", False):
-            self.ensure_main_window()
-        else:
-            self.show_permissions_window()
-            if not self.config.get("permissions_reset_done", False):
-                if self.permission_controller:
-                    self.permission_controller.set_bootstrap_state(
-                        False,
-                        tr("permissions.bootstrap_in_progress")
-                    )
-                self._reset_permissions_first_launch_if_needed()
 
     def ensure_main_window(self):
         if not self.window_controller:
@@ -196,9 +174,6 @@ class RecorderApp(rumps.App):
         self.window_controller.show_window()
 
     def show_permissions_window(self):
-        if self.config.get("permissions_onboarding_done", False):
-            self.ensure_main_window()
-            return
         if not self.permission_controller:
             self.permission_controller = PermissionWindowController.alloc().initWithApp_(self)
         self.permission_controller.show_window()
@@ -221,7 +196,17 @@ class RecorderApp(rumps.App):
             if self.permission_controller:
                 self.permission_controller.close_window()
                 self.permission_controller = None
-            self.ensure_main_window()
+            # Defer main window construction to the next runloop tick.
+            # This avoids doing a heavy window transition directly from
+            # permission/TCC callback context in bundled app.
+            def open_main_later():
+                self.ensure_main_window()
+                self.permissions_transition_started = False
+
+            try:
+                AppHelper.callAfter(open_main_later)
+            except Exception:
+                self.run_on_main(open_main_later)
         except Exception:
             logger.exception("Failed to complete permissions onboarding")
             self.permissions_transition_started = False
@@ -263,7 +248,7 @@ class RecorderApp(rumps.App):
         # Trigger UI update whenever icon/state changes context
         self.update_ui_state()
 
-    @rumps.timer(0.5)
+    @rumps.timer(1.0)
     def update_ui_state(self, _=None):
         """
         Updates the enabled/disabled state of menu items based on current app state.
@@ -298,6 +283,8 @@ class RecorderApp(rumps.App):
         # Can we use Recent Recordings? Only if IDLE (not recording AND not processing)
         can_use_recent = not (self.is_recording or self.is_processing or self.is_waiting_permissions)
 
+        idle_mode = not self.is_recording and not self.is_processing and not self.is_waiting_permissions
+
         # Blink marker for actively recording item in the list.
         if self.is_recording:
             self.recording_blink_on = not self.recording_blink_on
@@ -318,7 +305,7 @@ class RecorderApp(rumps.App):
             except Exception:
                 pass
 
-        if self.window_controller:
+        if self.window_controller and not idle_mode:
             self.window_controller.refresh_from_state()
             if self.is_recording or self.current_processing_file:
                 self.window_controller.refresh_file_lists()
@@ -507,63 +494,6 @@ class RecorderApp(rumps.App):
         if self.window_controller:
             self.window_controller.refresh_all()
 
-    def reset_permissions(self, _):
-        try:
-            result = subprocess.run(
-                ["tccutil", "reset", "All", APP_BUNDLE_ID],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode != 0:
-                details = (result.stderr or result.stdout or "Unknown error").strip()
-                rumps.alert(
-                    tr("reset.failed_title"),
-                    tr("reset.failed_with_details", details=details)
-                )
-                return
-
-            # Opens the exact privacy pane so the user can re-enable screen access immediately.
-            subprocess.call(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"])
-            rumps.alert(
-                tr("reset.done_title"),
-                tr("reset.done_body")
-            )
-        except Exception as e:
-            rumps.alert(tr("reset.failed_title"), tr("reset.failed_generic", error=e))
-
-    def reset_permissions_and_restart(self, _):
-        try:
-            result = subprocess.run(
-                ["tccutil", "reset", "All", APP_BUNDLE_ID],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode != 0:
-                details = (result.stderr or result.stdout or "Unknown error").strip()
-                rumps.alert(
-                    tr("reset.failed_title"),
-                    tr("reset.failed_with_details", details=details)
-                )
-                return
-
-            bundle_path = None
-            if HAS_PYOBJC:
-                try:
-                    bundle_path = NSBundle.mainBundle().bundlePath()
-                except Exception:
-                    bundle_path = None
-
-            if bundle_path and os.path.exists(bundle_path):
-                subprocess.Popen(["open", "-n", bundle_path])
-                rumps.quit_application()
-            else:
-                rumps.alert(
-                    tr("reset.relaunch_missing_app_title"),
-                    tr("reset.relaunch_missing_app_body")
-                )
-        except Exception as e:
-            rumps.alert(tr("reset.failed_title"), tr("reset.failed_generic", error=e))
-            
     def open_folder(self, _):
         subprocess.call(["open", self.config["save_dir"]])
 
@@ -624,6 +554,14 @@ class RecorderApp(rumps.App):
 
     def process_video_file(self, filename, prompt_override=None):
         if self.is_processing:
+            return
+        api_key = (self.config.get("api_key") or "").strip()
+        if not api_key:
+            rumps.alert(
+                tr("record.api_key_required_title"),
+                tr("record.api_key_required_body"),
+            )
+            self.set_api_key(None)
             return
         video_path = os.path.join(self.config["save_dir"], filename)
         if os.path.exists(video_path):

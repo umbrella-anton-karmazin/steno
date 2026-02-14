@@ -15,6 +15,11 @@ from steno.i18n import tr
 logger = logging.getLogger("Steno")
 
 
+def _is_invalid_api_key_error(error_text):
+    text = (error_text or "").lower()
+    return ("api_key_invalid" in text) or ("api key not valid" in text)
+
+
 def get_meeting_date(filename):
     """
     Алгоритм получения даты встречи:
@@ -54,7 +59,7 @@ def process_video_with_ai(video_path, config, app_instance, prompt_override=None
         app_instance.request_set_state_icon("processing")
         logger.info(f"Starting AI processing logic for: {video_path}")
 
-        api_key = config.get("api_key")
+        api_key = (config.get("api_key") or "").strip()
         if not api_key:
             logger.error("API Key is missing")
             rumps.notification(
@@ -63,6 +68,8 @@ def process_video_with_ai(video_path, config, app_instance, prompt_override=None
                 tr("ai.error.configure_api_key"),
             )
             app_instance.is_processing = False
+            app_instance.current_processing_file = None
+            app_instance.request_ui_refresh()
             if app_instance.is_recording:
                 app_instance.request_set_state_icon("recording")
             else:
@@ -190,7 +197,22 @@ def process_video_with_ai(video_path, config, app_instance, prompt_override=None
 
     except Exception as e:
         logger.exception("AI worker failed")
-        rumps.notification(tr("ai.error.title"), tr("ai.error.processing_failed"), str(e)[:50])
+        err_text = str(e)
+
+        def show_error_ui():
+            if _is_invalid_api_key_error(err_text):
+                rumps.alert(
+                    tr("record.api_key_required_title"),
+                    f"{tr('ai.error.missing_api_key')}. {tr('ai.error.configure_api_key')}",
+                )
+                app_instance.set_api_key(None)
+            else:
+                rumps.alert(
+                    tr("ai.error.title"),
+                    f"{tr('ai.error.processing_failed')}\n\n{err_text}",
+                )
+
+        app_instance.run_on_main(show_error_ui)
         app_instance.request_flash_error()
         app_instance.is_processing = False
         app_instance.current_processing_file = None
@@ -199,4 +221,3 @@ def process_video_with_ai(video_path, config, app_instance, prompt_override=None
             app_instance.request_set_state_icon("recording")
         else:
             app_instance.request_set_state_icon("idle")
-

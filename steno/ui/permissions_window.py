@@ -33,7 +33,9 @@ class PermissionWindowController(NSObject):
             self.mic_requested = False
             self.screen_granted = False
             self.mic_granted = False
-            self.bootstrap_done = bool(self.app.config.get("permissions_reset_done", False))
+            self._screen_granted_sticky = False
+            self._transitioning_to_main = False
+            self.bootstrap_done = True
             self.build_window()
         return self
 
@@ -141,12 +143,20 @@ class PermissionWindowController(NSObject):
 
     @objc.python_method
     def close_window(self):
+        self._transitioning_to_main = True
         self.window.orderOut_(None)
 
     @objc.python_method
     def refresh_statuses(self):
+        if self._transitioning_to_main:
+            return
         def check_permissions_worker():
-            screen_granted = self.app.permission_manager.is_screen_authorized()
+            # Once screen permission is confirmed, avoid repeated preflight calls.
+            # On some macOS setups repeated screen-preflight checks can stall app responsiveness.
+            if self._screen_granted_sticky:
+                screen_granted = True
+            else:
+                screen_granted = self.app.permission_manager.is_screen_authorized()
             mic_granted = self.app.permission_manager.is_mic_authorized()
             self.app.run_on_main(self._apply_permission_statuses, screen_granted, mic_granted)
 
@@ -154,8 +164,12 @@ class PermissionWindowController(NSObject):
 
     @objc.python_method
     def _apply_permission_statuses(self, screen_granted, mic_granted):
+        if self._transitioning_to_main:
+            return
         self.screen_granted = bool(screen_granted)
         self.mic_granted = bool(mic_granted)
+        if self.screen_granted:
+            self._screen_granted_sticky = True
 
         # If permissions are already granted (e.g., manually in System Settings),
         # treat the corresponding step as completed.
@@ -175,13 +189,18 @@ class PermissionWindowController(NSObject):
         )
         self.mic_status.setTextColor_(NSColor.systemGreenColor() if self.mic_granted else NSColor.systemRedColor())
 
-        self.screen_button.setEnabled_(self.bootstrap_done and (not self.screen_granted))
-        self.mic_button.setEnabled_(self.bootstrap_done and (not self.mic_granted))
+        self.screen_button.setEnabled_(not self.screen_granted)
+        self.mic_button.setEnabled_(not self.mic_granted)
 
-        if self.bootstrap_done and self.screen_requested and self.mic_requested and self.screen_granted and self.mic_granted:
+        if self.screen_requested and self.mic_requested and self.screen_granted and self.mic_granted:
+            self._transitioning_to_main = True
+            self.screen_button.setEnabled_(False)
+            self.mic_button.setEnabled_(False)
             self.app.request_complete_permissions_onboarding()
 
     def onRequestScreen_(self, _):
+        if self._transitioning_to_main:
+            return
         self.screen_requested = True
         self.screen_button.setEnabled_(False)
 
@@ -192,12 +211,13 @@ class PermissionWindowController(NSObject):
         threading.Thread(target=request_and_refresh, daemon=True).start()
 
     def onRequestMic_(self, _):
+        if self._transitioning_to_main:
+            return
         self.mic_requested = True
+        self.mic_button.setEnabled_(False)
 
         def completion(granted):
             logger.info(f"Mic permission granted from onboarding: {granted}")
             self.app.run_on_main(self.refresh_statuses)
 
         AVCaptureDevice.requestAccessForMediaType_completionHandler_(AVMediaTypeAudio, completion)
-        self.refresh_statuses()
-

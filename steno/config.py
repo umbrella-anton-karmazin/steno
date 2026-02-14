@@ -1,13 +1,32 @@
 import json
 import os
+import sys
 
 
-APP_BUNDLE_ID = "com.sergeygalay.steno"
 CONFIG_FILE = os.path.expanduser("~/.recorder_app_config.json")
 
-# steno/config.py -> project root/assets
-BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ASSETS_DIR = os.path.join(BASE_PATH, "assets")
+def _resolve_assets_dir():
+    # py2app runtime: resources are under Steno.app/Contents/Resources
+    resource_path = os.environ.get("RESOURCEPATH")
+    if resource_path:
+        candidate = os.path.join(resource_path, "assets")
+        if os.path.isdir(candidate):
+            return candidate
+
+    # Generic frozen fallback (e.g. other bundlers).
+    if getattr(sys, "frozen", False):
+        executable_dir = os.path.dirname(sys.executable)
+        candidate = os.path.join(executable_dir, "..", "Resources", "assets")
+        candidate = os.path.abspath(candidate)
+        if os.path.isdir(candidate):
+            return candidate
+
+    # Source mode: steno/config.py -> project root/assets
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, "assets")
+
+
+ASSETS_DIR = _resolve_assets_dir()
 
 ICON_IDLE = os.path.join(ASSETS_DIR, "icon_idle.png")
 ICON_RECORDING = os.path.join(ASSETS_DIR, "icon_recording.png")
@@ -31,7 +50,6 @@ DEFAULT_CONFIG = {
     "video_quality": "Medium",
     "used_tokens": 0,
     "last_request_tokens": 0,
-    "permissions_reset_done": False,
     "permissions_onboarding_done": False,
     "hidden_recordings": [],
 }
@@ -63,4 +81,3 @@ class ConfigManager:
     def save(config):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
-

@@ -165,12 +165,6 @@ class MainWindowActionsMixin:
     def onOpenOutput_(self, _):
         self.app.open_folder(None)
 
-    def onResetPermissions_(self, _):
-        self.app.reset_permissions(None)
-
-    def onResetPermissionsRestart_(self, _):
-        self.app.reset_permissions_and_restart(None)
-
     def onOpenLink_(self, _):
         self.app.open_link(None)
 

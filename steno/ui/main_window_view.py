@@ -289,6 +289,10 @@ class MainWindowViewMixin:
 
     def windowDidResize_(self, _):
         self._layout_root_views()
+        try:
+            self.refresh_detail_view()
+        except Exception:
+            pass
 
     def windowWillClose_(self, _):
         rumps.quit_application()
