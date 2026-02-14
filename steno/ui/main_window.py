@@ -1,0 +1,94 @@
+import objc
+from Foundation import NSObject
+
+from steno.ui.main_window_actions import MainWindowActionsMixin
+from steno.ui.main_window_state import MainWindowStateMixin
+from steno.ui.main_window_view import MainWindowViewMixin
+
+
+class MainWindowController(
+    NSObject,
+    MainWindowActionsMixin,
+    MainWindowStateMixin,
+    MainWindowViewMixin,
+):
+    def initWithApp_(self, app):
+        self = objc.super(MainWindowController, self).init()
+        if self:
+            self.app = app
+            self.recording_files = []
+            self.selected_recording = None
+            self.prompt_drafts = {}
+            self.prompt_loaded_for = None
+            self.build_window()
+        return self
+
+    # Expose ObjC selectors directly on the NSObject subclass so AppKit reliably sees them.
+    def windowDidResize_(self, obj):
+        return MainWindowViewMixin.windowDidResize_(self, obj)
+
+    def windowWillClose_(self, obj):
+        return MainWindowViewMixin.windowWillClose_(self, obj)
+
+    def menuWillOpen_(self, menu):
+        return MainWindowActionsMixin.menuWillOpen_(self, menu)
+
+    def numberOfRowsInTableView_(self, table):
+        return MainWindowStateMixin.numberOfRowsInTableView_(self, table)
+
+    def tableView_objectValueForTableColumn_row_(self, table, column, row):
+        return MainWindowStateMixin.tableView_objectValueForTableColumn_row_(self, table, column, row)
+
+    def tableView_shouldEditTableColumn_row_(self, table, column, row):
+        return MainWindowStateMixin.tableView_shouldEditTableColumn_row_(self, table, column, row)
+
+    def tableViewSelectionDidChange_(self, notification):
+        return MainWindowStateMixin.tableViewSelectionDidChange_(self, notification)
+
+    def onStartStop_(self, obj):
+        return MainWindowActionsMixin.onStartStop_(self, obj)
+
+    def onProcessSelected_(self, obj):
+        return MainWindowActionsMixin.onProcessSelected_(self, obj)
+
+    def onCopyProtocol_(self, obj):
+        return MainWindowActionsMixin.onCopyProtocol_(self, obj)
+
+    def onContextRename_(self, obj):
+        return MainWindowActionsMixin.onContextRename_(self, obj)
+
+    def onContextArchive_(self, obj):
+        return MainWindowActionsMixin.onContextArchive_(self, obj)
+
+    def onContextDelete_(self, obj):
+        return MainWindowActionsMixin.onContextDelete_(self, obj)
+
+    def onOpenSettings_(self, obj):
+        return MainWindowActionsMixin.onOpenSettings_(self, obj)
+
+    def onSelectQuality_(self, obj):
+        return MainWindowActionsMixin.onSelectQuality_(self, obj)
+
+    def onSelectModel_(self, obj):
+        return MainWindowActionsMixin.onSelectModel_(self, obj)
+
+    def onSetApiKey_(self, obj):
+        return MainWindowActionsMixin.onSetApiKey_(self, obj)
+
+    def onSetBaseURL_(self, obj):
+        return MainWindowActionsMixin.onSetBaseURL_(self, obj)
+
+    def onEditPrompt_(self, obj):
+        return MainWindowActionsMixin.onEditPrompt_(self, obj)
+
+    def onOpenOutput_(self, obj):
+        return MainWindowActionsMixin.onOpenOutput_(self, obj)
+
+    def onResetPermissions_(self, obj):
+        return MainWindowActionsMixin.onResetPermissions_(self, obj)
+
+    def onResetPermissionsRestart_(self, obj):
+        return MainWindowActionsMixin.onResetPermissionsRestart_(self, obj)
+
+    def onOpenLink_(self, obj):
+        return MainWindowActionsMixin.onOpenLink_(self, obj)
