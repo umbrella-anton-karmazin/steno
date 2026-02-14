@@ -40,7 +40,10 @@ try:
         NSMenu, NSWindow, NSButton, NSTextField, NSPopUpButton, NSFont,
         NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
         NSWindowStyleMaskMiniaturizable, NSWindowStyleMaskResizable,
-        NSBackingStoreBuffered, NSApp
+        NSBackingStoreBuffered, NSApp, NSVisualEffectView,
+        NSVisualEffectMaterialSidebar, NSVisualEffectStateActive,
+        NSVisualEffectBlendingModeBehindWindow, NSColor, NSViewWidthSizable,
+        NSViewHeightSizable
     )
     from Foundation import NSObject, NSURL, NSRunLoop, NSDate, NSBundle
     HAS_PYOBJC = True
@@ -340,12 +343,43 @@ if HAS_PYOBJC:
             return label
 
         @objc.python_method
+        def _secondary_label(self, frame, text):
+            label = self._label(frame, text, bold=False)
+            label.setTextColor_(NSColor.secondaryLabelColor())
+            label.setFont_(NSFont.systemFontOfSize_(12.0))
+            return label
+
+        @objc.python_method
         def _button(self, frame, title, action):
             button = NSButton.alloc().initWithFrame_(frame)
             button.setTitle_(title)
             button.setTarget_(self)
             button.setAction_(action)
             return button
+
+        @objc.python_method
+        def _primary_button(self, frame, title, action):
+            button = self._button(frame, title, action)
+            try:
+                button.setBezelColor_(NSColor.controlAccentColor())
+            except Exception:
+                pass
+            return button
+
+        @objc.python_method
+        def _card(self, parent, frame):
+            card = NSVisualEffectView.alloc().initWithFrame_(frame)
+            card.setMaterial_(NSVisualEffectMaterialSidebar)
+            card.setState_(NSVisualEffectStateActive)
+            card.setBlendingMode_(NSVisualEffectBlendingModeBehindWindow)
+            try:
+                card.setWantsLayer_(True)
+                card.layer().setCornerRadius_(14.0)
+                card.layer().setMasksToBounds_(True)
+            except Exception:
+                pass
+            parent.addSubview_(card)
+            return card
 
         @objc.python_method
         def build_window(self):
@@ -356,66 +390,97 @@ if HAS_PYOBJC:
                 | NSWindowStyleMaskResizable
             )
             self.window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-                ((220.0, 160.0), (760.0, 560.0)),
+                ((220.0, 120.0), (980.0, 680.0)),
                 style,
                 NSBackingStoreBuffered,
                 False
             )
             self.window.setTitle_("Steno")
+            self.window.setTitlebarAppearsTransparent_(True)
+            self.window.setMovableByWindowBackground_(True)
 
             content = self.window.contentView()
+            self.background = NSVisualEffectView.alloc().initWithFrame_(content.bounds())
+            self.background.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+            self.background.setMaterial_(NSVisualEffectMaterialSidebar)
+            self.background.setState_(NSVisualEffectStateActive)
+            self.background.setBlendingMode_(NSVisualEffectBlendingModeBehindWindow)
+            self.window.setContentView_(self.background)
 
-            self.status_label = self._label(((20.0, 520.0), (360.0, 24.0)), "Status: Idle", bold=True)
-            content.addSubview_(self.status_label)
+            self.title_label = self._label(((32.0, 630.0), (440.0, 30.0)), "Steno", bold=True)
+            self.title_label.setFont_(NSFont.boldSystemFontOfSize_(28.0))
+            self.background.addSubview_(self.title_label)
+            self.background.addSubview_(self._secondary_label(((32.0, 608.0), (520.0, 20.0)), "AI meeting recorder and protocol assistant"))
 
-            self.start_stop_button = self._button(((20.0, 480.0), (160.0, 30.0)), "Start Recording", "onStartStop:")
-            content.addSubview_(self.start_stop_button)
+            self.status_label = self._label(((780.0, 632.0), (168.0, 26.0)), "Idle", bold=True)
+            self.status_label.setAlignment_(2)
+            try:
+                self.status_label.setWantsLayer_(True)
+                self.status_label.layer().setCornerRadius_(12.0)
+                self.status_label.layer().setBackgroundColor_(NSColor.tertiarySystemFillColor().CGColor())
+            except Exception:
+                pass
+            self.background.addSubview_(self.status_label)
 
-            self.open_output_button = self._button(((190.0, 480.0), (160.0, 30.0)), "Open Output Folder", "onOpenOutput:")
-            content.addSubview_(self.open_output_button)
+            left_top = self._card(self.background, ((32.0, 420.0), (460.0, 170.0)))
+            left_top.addSubview_(self._label(((20.0, 132.0), (220.0, 24.0)), "Capture", bold=True))
+            left_top.addSubview_(self._secondary_label(((20.0, 112.0), (320.0, 18.0)), "Start/stop recording and quick actions"))
+            self.start_stop_button = self._primary_button(((20.0, 64.0), (180.0, 32.0)), "Start Recording", "onStartStop:")
+            left_top.addSubview_(self.start_stop_button)
+            self.open_output_button = self._button(((214.0, 64.0), (220.0, 32.0)), "Open Output Folder", "onOpenOutput:")
+            left_top.addSubview_(self.open_output_button)
+            self.open_link_button = self._button(((20.0, 22.0), (180.0, 30.0)), "Made by Sergey Galay", "onOpenLink:")
+            left_top.addSubview_(self.open_link_button)
 
-            self.open_link_button = self._button(((360.0, 480.0), (180.0, 30.0)), "Made by Sergey Galay", "onOpenLink:")
-            content.addSubview_(self.open_link_button)
+            left_bottom = self._card(self.background, ((32.0, 112.0), (460.0, 290.0)))
+            left_bottom.addSubview_(self._label(((20.0, 254.0), (260.0, 24.0)), "Recent Files", bold=True))
+            left_bottom.addSubview_(self._secondary_label(((20.0, 234.0), (320.0, 18.0)), "Process recordings and open protocols"))
 
-            content.addSubview_(self._label(((20.0, 440.0), (140.0, 22.0)), "Video Quality", bold=True))
-            self.quality_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 410.0), (240.0, 28.0)), False)
+            left_bottom.addSubview_(self._label(((20.0, 198.0), (200.0, 18.0)), "Recordings"))
+            self.recordings_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 166.0), (320.0, 30.0)), False)
+            left_bottom.addSubview_(self.recordings_popup)
+            self.process_recording_button = self._button(((350.0, 166.0), (90.0, 30.0)), "Process", "onProcessRecording:")
+            left_bottom.addSubview_(self.process_recording_button)
+
+            left_bottom.addSubview_(self._label(((20.0, 122.0), (200.0, 18.0)), "Protocols"))
+            self.protocols_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 90.0), (320.0, 30.0)), False)
+            left_bottom.addSubview_(self.protocols_popup)
+            self.open_protocol_button = self._button(((350.0, 90.0), (90.0, 30.0)), "Open", "onOpenProtocol:")
+            left_bottom.addSubview_(self.open_protocol_button)
+
+            right_top = self._card(self.background, ((510.0, 280.0), (438.0, 310.0)))
+            right_top.addSubview_(self._label(((20.0, 274.0), (260.0, 24.0)), "Settings", bold=True))
+            right_top.addSubview_(self._secondary_label(((20.0, 254.0), (260.0, 18.0)), "Model, quality and permissions"))
+
+            right_top.addSubview_(self._label(((20.0, 218.0), (120.0, 18.0)), "Video Quality"))
+            self.quality_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 188.0), (180.0, 30.0)), False)
             self.quality_popup.addItemsWithTitles_(list(VIDEO_QUALITY_PRESETS.keys()))
             self.quality_popup.setTarget_(self)
             self.quality_popup.setAction_("onQualityChanged:")
-            content.addSubview_(self.quality_popup)
+            right_top.addSubview_(self.quality_popup)
 
-            content.addSubview_(self._label(((280.0, 440.0), (140.0, 22.0)), "AI Model", bold=True))
-            self.model_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((280.0, 410.0), (300.0, 28.0)), False)
+            right_top.addSubview_(self._label(((218.0, 218.0), (120.0, 18.0)), "AI Model"))
+            self.model_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((218.0, 188.0), (200.0, 30.0)), False)
             self.model_popup.addItemsWithTitles_(AI_MODELS)
             self.model_popup.setTarget_(self)
             self.model_popup.setAction_("onModelChanged:")
-            content.addSubview_(self.model_popup)
+            right_top.addSubview_(self.model_popup)
 
-            self.set_api_key_button = self._button(((20.0, 370.0), (160.0, 30.0)), "Set API Key", "onSetApiKey:")
-            content.addSubview_(self.set_api_key_button)
-            self.edit_prompt_button = self._button(((190.0, 370.0), (160.0, 30.0)), "Edit Prompt", "onEditPrompt:")
-            content.addSubview_(self.edit_prompt_button)
-            self.reset_permissions_button = self._button(((360.0, 370.0), (180.0, 30.0)), "Reset Permissions", "onResetPermissions:")
-            content.addSubview_(self.reset_permissions_button)
-            self.reset_and_restart_button = self._button(((550.0, 370.0), (190.0, 30.0)), "Reset + Restart", "onResetPermissionsRestart:")
-            content.addSubview_(self.reset_and_restart_button)
+            self.set_api_key_button = self._button(((20.0, 136.0), (180.0, 30.0)), "Set API Key", "onSetApiKey:")
+            right_top.addSubview_(self.set_api_key_button)
+            self.edit_prompt_button = self._button(((218.0, 136.0), (200.0, 30.0)), "Edit System Prompt", "onEditPrompt:")
+            right_top.addSubview_(self.edit_prompt_button)
+            self.reset_permissions_button = self._button(((20.0, 86.0), (180.0, 30.0)), "Reset Permissions", "onResetPermissions:")
+            right_top.addSubview_(self.reset_permissions_button)
+            self.reset_and_restart_button = self._button(((218.0, 86.0), (200.0, 30.0)), "Reset + Restart", "onResetPermissionsRestart:")
+            right_top.addSubview_(self.reset_and_restart_button)
 
-            content.addSubview_(self._label(((20.0, 340.0), (300.0, 22.0)), "Recent Recordings", bold=True))
-            self.recordings_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 310.0), (560.0, 28.0)), False)
-            content.addSubview_(self.recordings_popup)
-            self.process_recording_button = self._button(((590.0, 310.0), (150.0, 28.0)), "Process Selected", "onProcessRecording:")
-            content.addSubview_(self.process_recording_button)
-
-            content.addSubview_(self._label(((20.0, 280.0), (300.0, 22.0)), "Recent Protocols", bold=True))
-            self.protocols_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 250.0), (560.0, 28.0)), False)
-            content.addSubview_(self.protocols_popup)
-            self.open_protocol_button = self._button(((590.0, 250.0), (150.0, 28.0)), "Open Selected", "onOpenProtocol:")
-            content.addSubview_(self.open_protocol_button)
-
-            self.last_tokens_label = self._label(((20.0, 215.0), (300.0, 22.0)), "Last request: 0")
-            content.addSubview_(self.last_tokens_label)
-            self.total_tokens_label = self._label(((20.0, 192.0), (300.0, 22.0)), "Used tokens: 0")
-            content.addSubview_(self.total_tokens_label)
+            right_bottom = self._card(self.background, ((510.0, 112.0), (438.0, 150.0)))
+            right_bottom.addSubview_(self._label(((20.0, 114.0), (200.0, 24.0)), "Usage", bold=True))
+            self.last_tokens_label = self._secondary_label(((20.0, 82.0), (250.0, 20.0)), "Last request: 0")
+            right_bottom.addSubview_(self.last_tokens_label)
+            self.total_tokens_label = self._secondary_label(((20.0, 58.0), (250.0, 20.0)), "Used tokens: 0")
+            right_bottom.addSubview_(self.total_tokens_label)
 
             self.refresh_all()
 
@@ -435,16 +500,20 @@ if HAS_PYOBJC:
         @objc.python_method
         def refresh_from_state(self):
             if self.app.is_recording:
-                state_text = "Status: Recording"
+                state_text = "Recording"
                 self.start_stop_button.setTitle_("Stop")
+                status_color = NSColor.systemRedColor()
             elif self.app.is_processing:
-                state_text = "Status: Processing"
+                state_text = "Processing"
                 self.start_stop_button.setTitle_("Start Recording")
+                status_color = NSColor.systemOrangeColor()
             else:
-                state_text = "Status: Idle"
+                state_text = "Idle"
                 self.start_stop_button.setTitle_("Start Recording")
+                status_color = NSColor.systemGreenColor()
 
             self.status_label.setStringValue_(state_text)
+            self.status_label.setTextColor_(status_color)
 
             can_start = not self.app.is_recording and not self.app.is_processing
             can_process = not self.app.is_recording and not self.app.is_processing
