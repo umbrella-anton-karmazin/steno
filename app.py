@@ -36,7 +36,12 @@ try:
     )
     from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
     from UserNotifications import UNUserNotificationCenter, UNAuthorizationOptionAlert, UNAuthorizationOptionSound, UNAuthorizationOptionBadge
-    from AppKit import NSMenu
+    from AppKit import (
+        NSMenu, NSWindow, NSButton, NSTextField, NSPopUpButton, NSFont,
+        NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
+        NSWindowStyleMaskMiniaturizable, NSWindowStyleMaskResizable,
+        NSBackingStoreBuffered, NSApp
+    )
     from Foundation import NSObject, NSURL, NSRunLoop, NSDate, NSBundle
     HAS_PYOBJC = True
 except ImportError as e:
@@ -311,6 +316,218 @@ def process_video_with_ai(video_path, config, app_instance):
             app_instance.set_state_icon("idle")
 
 # --- GUI Приложение ---
+if HAS_PYOBJC:
+    class MainWindowController(NSObject):
+        def initWithApp_(self, app):
+            self = objc.super(MainWindowController, self).init()
+            if self:
+                self.app = app
+                self.recording_files = []
+                self.protocol_files = []
+                self.build_window()
+            return self
+
+        @objc.python_method
+        def _label(self, frame, text, bold=False):
+            label = NSTextField.alloc().initWithFrame_(frame)
+            label.setBezeled_(False)
+            label.setDrawsBackground_(False)
+            label.setEditable_(False)
+            label.setSelectable_(False)
+            label.setStringValue_(text)
+            if bold:
+                label.setFont_(NSFont.boldSystemFontOfSize_(13.0))
+            return label
+
+        @objc.python_method
+        def _button(self, frame, title, action):
+            button = NSButton.alloc().initWithFrame_(frame)
+            button.setTitle_(title)
+            button.setTarget_(self)
+            button.setAction_(action)
+            return button
+
+        @objc.python_method
+        def build_window(self):
+            style = (
+                NSWindowStyleMaskTitled
+                | NSWindowStyleMaskClosable
+                | NSWindowStyleMaskMiniaturizable
+                | NSWindowStyleMaskResizable
+            )
+            self.window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+                ((220.0, 160.0), (760.0, 560.0)),
+                style,
+                NSBackingStoreBuffered,
+                False
+            )
+            self.window.setTitle_("Steno")
+
+            content = self.window.contentView()
+
+            self.status_label = self._label(((20.0, 520.0), (360.0, 24.0)), "Status: Idle", bold=True)
+            content.addSubview_(self.status_label)
+
+            self.start_stop_button = self._button(((20.0, 480.0), (160.0, 30.0)), "Start Recording", "onStartStop:")
+            content.addSubview_(self.start_stop_button)
+
+            self.open_output_button = self._button(((190.0, 480.0), (160.0, 30.0)), "Open Output Folder", "onOpenOutput:")
+            content.addSubview_(self.open_output_button)
+
+            self.open_link_button = self._button(((360.0, 480.0), (180.0, 30.0)), "Made by Sergey Galay", "onOpenLink:")
+            content.addSubview_(self.open_link_button)
+
+            content.addSubview_(self._label(((20.0, 440.0), (140.0, 22.0)), "Video Quality", bold=True))
+            self.quality_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 410.0), (240.0, 28.0)), False)
+            self.quality_popup.addItemsWithTitles_(list(VIDEO_QUALITY_PRESETS.keys()))
+            self.quality_popup.setTarget_(self)
+            self.quality_popup.setAction_("onQualityChanged:")
+            content.addSubview_(self.quality_popup)
+
+            content.addSubview_(self._label(((280.0, 440.0), (140.0, 22.0)), "AI Model", bold=True))
+            self.model_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((280.0, 410.0), (300.0, 28.0)), False)
+            self.model_popup.addItemsWithTitles_(AI_MODELS)
+            self.model_popup.setTarget_(self)
+            self.model_popup.setAction_("onModelChanged:")
+            content.addSubview_(self.model_popup)
+
+            self.set_api_key_button = self._button(((20.0, 370.0), (160.0, 30.0)), "Set API Key", "onSetApiKey:")
+            content.addSubview_(self.set_api_key_button)
+            self.edit_prompt_button = self._button(((190.0, 370.0), (160.0, 30.0)), "Edit Prompt", "onEditPrompt:")
+            content.addSubview_(self.edit_prompt_button)
+            self.reset_permissions_button = self._button(((360.0, 370.0), (180.0, 30.0)), "Reset Permissions", "onResetPermissions:")
+            content.addSubview_(self.reset_permissions_button)
+            self.reset_and_restart_button = self._button(((550.0, 370.0), (190.0, 30.0)), "Reset + Restart", "onResetPermissionsRestart:")
+            content.addSubview_(self.reset_and_restart_button)
+
+            content.addSubview_(self._label(((20.0, 340.0), (300.0, 22.0)), "Recent Recordings", bold=True))
+            self.recordings_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 310.0), (560.0, 28.0)), False)
+            content.addSubview_(self.recordings_popup)
+            self.process_recording_button = self._button(((590.0, 310.0), (150.0, 28.0)), "Process Selected", "onProcessRecording:")
+            content.addSubview_(self.process_recording_button)
+
+            content.addSubview_(self._label(((20.0, 280.0), (300.0, 22.0)), "Recent Protocols", bold=True))
+            self.protocols_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(((20.0, 250.0), (560.0, 28.0)), False)
+            content.addSubview_(self.protocols_popup)
+            self.open_protocol_button = self._button(((590.0, 250.0), (150.0, 28.0)), "Open Selected", "onOpenProtocol:")
+            content.addSubview_(self.open_protocol_button)
+
+            self.last_tokens_label = self._label(((20.0, 215.0), (300.0, 22.0)), "Last request: 0")
+            content.addSubview_(self.last_tokens_label)
+            self.total_tokens_label = self._label(((20.0, 192.0), (300.0, 22.0)), "Used tokens: 0")
+            content.addSubview_(self.total_tokens_label)
+
+            self.refresh_all()
+
+        @objc.python_method
+        def show_window(self):
+            self.window.makeKeyAndOrderFront_(None)
+            app = NSApp()
+            if app:
+                app.activateIgnoringOtherApps_(True)
+
+        @objc.python_method
+        def refresh_all(self):
+            self.refresh_from_state()
+            self.refresh_config_controls()
+            self.refresh_file_lists()
+
+        @objc.python_method
+        def refresh_from_state(self):
+            if self.app.is_recording:
+                state_text = "Status: Recording"
+                self.start_stop_button.setTitle_("Stop")
+            elif self.app.is_processing:
+                state_text = "Status: Processing"
+                self.start_stop_button.setTitle_("Start Recording")
+            else:
+                state_text = "Status: Idle"
+                self.start_stop_button.setTitle_("Start Recording")
+
+            self.status_label.setStringValue_(state_text)
+
+            can_start = not self.app.is_recording and not self.app.is_processing
+            can_process = not self.app.is_recording and not self.app.is_processing
+            self.start_stop_button.setEnabled_(self.app.is_recording or can_start)
+            self.process_recording_button.setEnabled_(can_process and bool(self.recording_files))
+            self.open_protocol_button.setEnabled_(bool(self.protocol_files))
+
+        @objc.python_method
+        def refresh_config_controls(self):
+            quality = self.app.config.get("video_quality", "Medium")
+            model = self.app.config.get("model_name", AI_MODELS[0])
+            self.quality_popup.selectItemWithTitle_(quality)
+            self.model_popup.selectItemWithTitle_(model)
+            self.last_tokens_label.setStringValue_(f"Last request: {self.app.config.get('last_request_tokens', 0)}")
+            self.total_tokens_label.setStringValue_(f"Used tokens: {self.app.config.get('used_tokens', 0)}")
+
+        @objc.python_method
+        def refresh_file_lists(self):
+            self.recording_files = self.app.list_recent_recordings(limit=10)
+            self.protocol_files = self.app.list_recent_protocols(limit=10)
+
+            self.recordings_popup.removeAllItems()
+            if self.recording_files:
+                self.recordings_popup.addItemsWithTitles_(self.recording_files)
+            else:
+                self.recordings_popup.addItemWithTitle_("Empty")
+
+            self.protocols_popup.removeAllItems()
+            if self.protocol_files:
+                self.protocols_popup.addItemsWithTitles_(self.protocol_files)
+            else:
+                self.protocols_popup.addItemWithTitle_("Empty")
+
+            self.refresh_from_state()
+
+        def onStartStop_(self, _):
+            self.app.record_switch(None)
+            self.refresh_from_state()
+
+        def onOpenOutput_(self, _):
+            self.app.open_folder(None)
+
+        def onOpenLink_(self, _):
+            self.app.open_link(None)
+
+        def onQualityChanged_(self, sender):
+            self.app.set_video_quality_value(sender.titleOfSelectedItem())
+            self.refresh_config_controls()
+
+        def onModelChanged_(self, sender):
+            self.app.set_ai_model_value(sender.titleOfSelectedItem())
+            self.refresh_config_controls()
+
+        def onSetApiKey_(self, _):
+            self.app.set_api_key(None)
+            self.refresh_config_controls()
+
+        def onEditPrompt_(self, _):
+            self.app.edit_prompt(None)
+
+        def onResetPermissions_(self, _):
+            self.app.reset_permissions(None)
+
+        def onResetPermissionsRestart_(self, _):
+            self.app.reset_permissions_and_restart(None)
+
+        def onProcessRecording_(self, _):
+            if not self.recording_files:
+                return
+            idx = self.recordings_popup.indexOfSelectedItem()
+            if idx < 0 or idx >= len(self.recording_files):
+                return
+            self.app.process_video_file(self.recording_files[idx])
+            self.refresh_from_state()
+
+        def onOpenProtocol_(self, _):
+            if not self.protocol_files:
+                return
+            idx = self.protocols_popup.indexOfSelectedItem()
+            if idx < 0 or idx >= len(self.protocol_files):
+                return
+            self.app.open_protocol_by_name(self.protocol_files[idx])
+
 class RecorderApp(rumps.App):
     def __init__(self):
         initial_icon = ICON_IDLE if os.path.exists(ICON_IDLE) else None
@@ -320,6 +537,7 @@ class RecorderApp(rumps.App):
         self.config = ConfigManager.load()
         self.is_recording = False
         self.is_processing = False
+        self.window_controller = None
         
         # Native Capture Properties
         self.recorder = None
@@ -340,6 +558,8 @@ class RecorderApp(rumps.App):
         if HAS_PYOBJC:
             self._delegate = MenuDelegate.alloc().initWithApp_(self)
             self._menu._menu.setDelegate_(self._delegate)
+            self.window_controller = MainWindowController.alloc().initWithApp_(self)
+            self.window_controller.show_window()
         
         logger.info("Steno initialized (Dual-Stream Mode)")
 
@@ -422,6 +642,9 @@ class RecorderApp(rumps.App):
                 except Exception:
                     pass
 
+        if self.window_controller:
+            self.window_controller.refresh_from_state()
+
     def flash_error(self):
         def blink():
             for _ in range(6):
@@ -439,6 +662,8 @@ class RecorderApp(rumps.App):
             self.model_menu.add(item)
 
         self.menu = [
+            rumps.MenuItem("Open Steno UI", callback=self.open_main_window),
+            None,
             "Start Recording",
             self.recent_recordings_menu,
             self.recent_protocols_menu,
@@ -486,6 +711,10 @@ class RecorderApp(rumps.App):
             except:
                 pass
 
+    def open_main_window(self, _=None):
+        if self.window_controller:
+            self.window_controller.show_window()
+
     def update_token_stats(self):
         last = self.config.get("last_request_tokens", 0)
         total = self.config.get("used_tokens", 0)
@@ -493,18 +722,34 @@ class RecorderApp(rumps.App):
             self.last_request_item.title = f"Last request: {last}"
         if hasattr(self, 'total_tokens_item'):
             self.total_tokens_item.title = f"Used tokens: {total}"
+        if self.window_controller:
+            self.window_controller.refresh_config_controls()
+
+    def set_video_quality_value(self, quality_name):
+        if quality_name not in VIDEO_QUALITY_PRESETS:
+            return
+        self.config["video_quality"] = quality_name
+        for item in self.quality_menu.values():
+            item.state = 1 if item.title == quality_name else 0
+        ConfigManager.save(self.config)
+        if self.window_controller:
+            self.window_controller.refresh_config_controls()
+
+    def set_ai_model_value(self, model_name):
+        if model_name not in AI_MODELS:
+            return
+        self.config["model_name"] = model_name
+        for item in self.model_menu.values():
+            item.state = 1 if item.title == model_name else 0
+        ConfigManager.save(self.config)
+        if self.window_controller:
+            self.window_controller.refresh_config_controls()
 
     def select_video_quality(self, sender):
-        self.config["video_quality"] = sender.title
-        for item in self.quality_menu.values():
-            item.state = 1 if item.title == sender.title else 0
-        ConfigManager.save(self.config)
+        self.set_video_quality_value(sender.title)
 
     def select_ai_model(self, sender):
-        self.config["model_name"] = sender.title
-        for item in self.model_menu.values():
-            item.state = 1 if item.title == sender.title else 0
-        ConfigManager.save(self.config)
+        self.set_ai_model_value(sender.title)
 
     def edit_prompt(self, _):
         w = rumps.Window("Edit System Prompt", "Instructions for Gemini:", self.config["prompt"], dimensions=(600, 200))
@@ -512,6 +757,8 @@ class RecorderApp(rumps.App):
         if r.clicked:
             self.config["prompt"] = r.text.strip()
             ConfigManager.save(self.config)
+            if self.window_controller:
+                self.window_controller.refresh_config_controls()
 
     def set_api_key(self, _):
         w = rumps.Window("Google API Key", default_text=self.config["api_key"], dimensions=(600, 50))
@@ -519,6 +766,8 @@ class RecorderApp(rumps.App):
         if r.clicked:
             self.config["api_key"] = r.text.strip()
             ConfigManager.save(self.config)
+            if self.window_controller:
+                self.window_controller.refresh_config_controls()
 
     def reset_permissions(self, _):
         try:
@@ -602,6 +851,12 @@ class RecorderApp(rumps.App):
         else:
             self.stop_recording(sender)
 
+    def _set_start_stop_title(self, new_title):
+        if "Start Recording" in self.menu and new_title == "Stop":
+            self.menu["Start Recording"].title = "Stop"
+        elif "Stop" in self.menu and new_title == "Start Recording":
+            self.menu["Stop"].title = "Start Recording"
+
     # --- START RECORDING (ОБНОВЛЕННЫЙ) ---
     def start_recording(self, sender):
         timestamp = datetime.now().strftime("%d.%m.%Y_%H:%M:%S")
@@ -636,14 +891,18 @@ class RecorderApp(rumps.App):
                     rumps.alert("Recording Error", f"Не удалось начать запись: {error_msg}\n\nПроверьте права доступа в System Settings -> Privacy & Security -> Screen Recording.")
                     # Сбрасываем UI в исходное состояние
                     self.is_recording = False
-                    sender.title = "Start Recording"
+                    if sender:
+                        sender.title = "Start Recording"
+                    self._set_start_stop_title("Start Recording")
                     self.set_state_icon("idle")
                     self.recorder = None
 
             self.recorder.startWithCallback_(start_callback)
             
             self.is_recording = True
-            sender.title = "Stop"
+            if sender:
+                sender.title = "Stop"
+            self._set_start_stop_title("Stop")
             self.set_state_icon("recording")
             
         except Exception as e:
@@ -657,13 +916,31 @@ class RecorderApp(rumps.App):
             self.recorder.stop()
         
         self.is_recording = False
-        sender.title = "Start Recording"
+        if sender:
+            sender.title = "Start Recording"
+        self._set_start_stop_title("Start Recording")
         self.set_state_icon("idle")
         
         rumps.notification("Готово", "Файлы сохранены", os.path.basename(self.current_filename))
         # Даем время на закрытие файлов
         time.sleep(1.0)
         self.refresh_files_menus()
+
+    def list_recent_recordings(self, limit=10):
+        save_dir = self.config["save_dir"]
+        if not os.path.exists(save_dir):
+            return []
+        files = [f for f in os.listdir(save_dir) if f.lower().endswith(".mp4")]
+        files.sort(key=lambda x: os.path.getmtime(os.path.join(save_dir, x)), reverse=True)
+        return files[:limit]
+
+    def list_recent_protocols(self, limit=10):
+        save_dir = self.config["save_dir"]
+        if not os.path.exists(save_dir):
+            return []
+        files = [f for f in os.listdir(save_dir) if f.endswith("_protocol.txt")]
+        files.sort(key=lambda x: os.path.getmtime(os.path.join(save_dir, x)), reverse=True)
+        return files[:limit]
 
     # --- REFRESH MENU (С ФИЛЬТРАЦИЕЙ СИСТЕМНЫХ ФАЙЛОВ) ---
     def refresh_files_menus(self, _=None):
@@ -672,42 +949,42 @@ class RecorderApp(rumps.App):
             for item_title in list(self.recent_recordings_menu.keys()):
                 del self.recent_recordings_menu[item_title]
             
-            save_dir = self.config["save_dir"]
-            if os.path.exists(save_dir):
-                # Показываем только .mp4 (основные файлы). 
-                # .m4a (системные) скрыты, они подтянутся автоматически при обработке.
-                files = [f for f in os.listdir(save_dir) if f.lower().endswith(".mp4")]
-                files.sort(key=lambda x: os.path.getmtime(os.path.join(save_dir, x)), reverse=True)
-                
-                if files:
-                    for f in files[:10]:
-                        self.recent_recordings_menu.add(rumps.MenuItem(f, callback=self.process_selected_file))
-                else:
-                    self.recent_recordings_menu.add(rumps.MenuItem("Empty", callback=None))
+            recordings = self.list_recent_recordings(limit=10)
+            if recordings:
+                for f in recordings:
+                    self.recent_recordings_menu.add(rumps.MenuItem(f, callback=self.process_selected_file))
+            else:
+                self.recent_recordings_menu.add(rumps.MenuItem("Empty", callback=None))
 
             # Очистка меню протоколов
             for item_title in list(self.recent_protocols_menu.keys()):
                 del self.recent_protocols_menu[item_title]
 
-            if os.path.exists(save_dir):
-                p_files = [f for f in os.listdir(save_dir) if f.endswith("_protocol.txt")]
-                p_files.sort(key=lambda x: os.path.getmtime(os.path.join(save_dir, x)), reverse=True)
-                if p_files:
-                    for f in p_files[:10]:
-                        self.recent_protocols_menu.add(rumps.MenuItem(f, callback=self.open_protocol_file))
-                else:
-                    self.recent_protocols_menu.add(rumps.MenuItem("Empty", callback=None))
+            protocols = self.list_recent_protocols(limit=10)
+            if protocols:
+                for f in protocols:
+                    self.recent_protocols_menu.add(rumps.MenuItem(f, callback=self.open_protocol_file))
+            else:
+                self.recent_protocols_menu.add(rumps.MenuItem("Empty", callback=None))
+
+            if self.window_controller:
+                self.window_controller.refresh_file_lists()
         except Exception as e:
             logger.warning(f"Menu refresh warning: {e}")
 
+    def open_protocol_by_name(self, filename):
+        subprocess.call(["open", os.path.join(self.config["save_dir"], filename)])
+
     def open_protocol_file(self, sender):
-        subprocess.call(["open", os.path.join(self.config["save_dir"], sender.title)])
+        self.open_protocol_by_name(sender.title)
+
+    def process_video_file(self, filename):
+        video_path = os.path.join(self.config["save_dir"], filename)
+        if os.path.exists(video_path):
+            threading.Thread(target=process_video_with_ai, args=(video_path, self.config, self), daemon=True).start()
 
     def process_selected_file(self, sender):
-        video_path = os.path.join(self.config["save_dir"], sender.title)
-        if os.path.exists(video_path):
-            # Запускаем в отдельном потоке
-            threading.Thread(target=process_video_with_ai, args=(video_path, self.config, self), daemon=True).start()
+        self.process_video_file(sender.title)
 
 if HAS_PYOBJC:
     class MenuDelegate(NSObject):

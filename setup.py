@@ -22,7 +22,7 @@ DATA_FILES = [
 OPTIONS = {
     'argv_emulation': True,
     'plist': {
-        'LSUIElement': True,
+        'LSUIElement': False,
         'CFBundleName': "Steno",
         'CFBundleDisplayName': "Steno",
         'CFBundleIdentifier': "com.sergeygalay.steno",

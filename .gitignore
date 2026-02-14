@@ -5,3 +5,5 @@ dist
 build/
 .venv*
 bin/ffmpeg
+__pycache__/
+*.py[cod]
