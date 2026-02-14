@@ -1,174 +1,194 @@
-# SPEC: Steno (Implemented)
+# SPEC: Steno (Реализовано)
 
-## 1. Scope
-This document describes what is currently implemented in the codebase after the UI/architecture refactor.
-It is based on:
-- current source code under `app.py`, `recorder.py`, `steno/*`;
-- implemented parts of earlier planning in previous `SPEC.md`.
+## 1. Область документа
+Этот документ описывает текущее реализованное состояние кодовой базы после рефакторинга UI/архитектуры.
+Основан на:
+- текущем исходном коде в `app.py`, `recorder.py`, `steno/*`;
+- реализованных частях предыдущего плана из ранней версии `SPEC.md`.
 
-## 2. Product Goals (Implemented)
-- Record meetings on macOS with separate media tracks:
-  - screen + system audio to `.mp4`;
-  - microphone audio to `_mic.m4a`.
-- Process recordings with Gemini-compatible API and generate `_protocol.txt`.
-- Provide a desktop UI to browse recordings, process selected items, and manage artifacts.
-- Support first-run permissions onboarding and bilingual UI (RU/EN).
+## 2. Цели продукта (Реализовано)
+- Запись встреч на macOS с раздельными медиапотоками:
+  - экран + системный звук в `.mp4`;
+  - микрофон в `_mic.m4a`.
+- Обработка записей через Gemini-совместимый API с генерацией `_protocol.txt`.
+- Десктопный UI для просмотра записей, обработки выбранных встреч и управления артефактами.
+- Поток первичной выдачи разрешений и двуязычный интерфейс (RU/EN).
 
-## 3. Current Architecture
-- Coordinator:
-  - `app.py` (`RecorderApp`) controls app lifecycle, menus, timers, global state.
-- Services:
+## 3. Текущая архитектура
+- Координатор:
+  - `app.py` (`RecorderApp`) управляет жизненным циклом приложения, меню, таймерами и глобальным состоянием.
+- Сервисы:
   - `steno/services/permissions_service.py` (`PermissionManager`)
   - `steno/services/recording_service.py` (`RecordingService`)
   - `steno/services/processing_service.py` (`process_video_with_ai`)
-  - `steno/services/recordings_service.py` (`RecordingsService`)
+  - `steno/services/meetings_service.py` (`MeetingsService`)
 - UI:
   - `steno/ui/permissions_window.py`
-  - `steno/ui/main_window.py` (selector-safe ObjC class wrapper)
+  - `steno/ui/main_window.py` (ObjC-обертка, безопасная для selector-методов)
   - `steno/ui/main_window_view.py`
   - `steno/ui/main_window_state.py`
   - `steno/ui/main_window_actions.py`
   - `steno/ui/menu_delegate.py`
-- Config/i18n:
+- Конфиг/i18n:
   - `steno/config.py`
   - `steno/i18n.py`
   - `assets/i18n/en.yaml`, `assets/i18n/ru.yaml`
 
-## 4. Functional Specification
+## 4. Функциональная спецификация
 
-### 4.1 First Launch and Permissions
-- On first launch, app runs one-time TCC reset for:
+### 4.1 Первый запуск и разрешения
+- При первом запуске приложение выполняет одноразовый TCC reset для:
   - `ScreenCapture`
   - `Microphone`
-- State persisted in config:
+- Состояние хранится в конфиге:
   - `permissions_reset_done`
   - `permissions_onboarding_done`
-- Before onboarding completion, a dedicated permissions window is shown:
-  - separate status lines for screen and mic;
-  - separate request buttons;
-  - transition to main window only after both permissions are granted and both steps were requested.
-- On subsequent launches (without reinstall), reset is not repeated.
+- До завершения onboarding показывается отдельное окно разрешений:
+  - отдельные статусы для экрана и микрофона;
+  - отдельные кнопки запроса;
+  - переход в основное окно только после выдачи обоих разрешений и явного прохождения обоих шагов.
+- При последующих запусках (без переустановки) reset не повторяется.
 
-### 4.2 Main Window
-- Two-panel layout:
-  - fixed-width sidebar (`300px`);
-  - adaptive content area.
-- Sidebar contains:
-  - Start/Stop button;
-  - circular state indicator aligned with button;
-  - recordings table;
-  - settings button;
-  - "Made by Sergey Galay" link.
-- Content area contains:
-  - selected meeting title;
-  - files line (`Video: ...`, `Audio: ...`), video includes `.mp4`;
-  - `Process` button;
-  - `Copy` protocol button;
+### 4.2 Основное окно
+- Двухпанельная компоновка:
+  - sidebar фиксированной ширины (`300px`);
+  - адаптивная основная область.
+- Sidebar содержит:
+  - кнопку Start/Stop;
+  - круглый индикатор состояния, выровненный по кнопке;
+  - таблицу записей;
+  - кнопку настроек;
+  - ссылку "Made by Sergey Galay".
+- Основная область содержит:
+  - заголовок выбранной встречи;
+  - блок файлов (`Video: ...`, `Audio: ...`), видео отображается с `.mp4`;
+  - кнопку `Process`;
+  - кнопку `Copy` для протокола;
   - loader;
-  - editable system prompt text area for unprocessed recordings;
-  - protocol text view.
+  - редактируемое поле системного промпта для необработанных записей;
+  - текст протокола.
 
-### 4.3 Recording Lifecycle
-- `Start` validates:
-  - onboarding completion;
-  - no active processing conflict;
-  - API key present;
-  - permissions granted.
-- Capture files naming:
+### 4.3 Жизненный цикл записи
+- `Start` валидирует:
+  - завершение onboarding;
+  - отсутствие конфликта с активной обработкой;
+  - наличие API key;
+  - выданные разрешения.
+- Схема именования файлов:
   - `Meet_DD.MM.YYYY_HH:MM:SS.mp4`
   - `Meet_DD.MM.YYYY_HH:MM:SS_mic.m4a`
-- Uses `ScreenRecorder` (`recorder.py`) with dual writers.
-- Includes start timeout watchdog (15s) with user alert.
-- `Stop` finalizes recording and refreshes UI/menu.
+- Используется `ScreenRecorder` (`recorder.py`) с dual writer-пайплайном.
+- Есть watchdog таймаута старта (15с) с уведомлением пользователю.
+- `Stop` завершает запись и обновляет UI/меню.
 
-### 4.4 Processing Lifecycle
-- Triggered for selected unprocessed recording.
-- Uses per-recording prompt draft from UI (falls back to config prompt).
-- Uploads `.mp4` and optional `_mic.m4a` to Gemini files API.
-- Waits for file readiness; generates protocol with selected model.
-- Saves result to `<base>_protocol.txt`.
-- Tracks token usage in config:
+### 4.4 Жизненный цикл обработки
+- Запускается для выбранной необработанной записи.
+- Использует prompt-draft на уровне конкретной записи из UI (с fallback на prompt из конфига).
+- Загружает `.mp4` и опционально `_mic.m4a` в Gemini Files API.
+- Ожидает готовность файлов и генерирует протокол выбранной моделью.
+- Сохраняет результат в `<base>_protocol.txt`.
+- Учитывает токены в конфиге:
   - `last_request_tokens`
   - `used_tokens`
-- UI status updates:
-  - processing state, loader, disabled actions, completion notification.
+- UI-обновления статуса:
+  - состояние обработки, loader, блокировка действий, уведомление о завершении.
 
-### 4.5 Recordings List and Statuses
-- Source: `save_dir`, `.mp4` only, sorted by mtime desc.
-- Status per item:
+### 4.5 Список записей и статусы
+- Источник: `save_dir`, только `.mp4`, сортировка по `mtime desc`.
+- Статус элемента:
   - `recording`
   - `processing`
   - `processed`
   - `unprocessed`
-- Visual marker in list:
-  - blinking marker for actively recording item.
+- Визуальный маркер в списке:
+  - мигающий индикатор для активной записи.
 
-### 4.6 Recording Item Context Menu
-Implemented actions (right-click on list item):
-- Rename meeting:
-  - removes accidental `.mp4` suffix from entered title;
-  - renames linked files atomically when present (`.mp4`, `_mic.m4a`, `_protocol.txt`);
-  - guards against collisions and rollback on failure.
-- Archive:
-  - hides recording from list via `hidden_recordings` config;
-  - leaves files on disk.
-- Delete:
-  - removes `.mp4`, `_mic.m4a`, `_protocol.txt` with confirmation.
+### 4.6 Контекстное меню записи
+Реализованные действия (правый клик по элементу списка):
+- Переименовать встречу:
+  - удаляет случайный суффикс `.mp4` из введенного названия;
+  - атомарно переименовывает связанные файлы, если они есть (`.mp4`, `_mic.m4a`, `_protocol.txt`);
+  - защищает от коллизий и делает rollback при ошибке.
+- Архивировать:
+  - скрывает запись из списка через `hidden_recordings` в конфиге;
+  - оставляет файлы на диске.
+- Удалить:
+  - удаляет `.mp4`, `_mic.m4a`, `_protocol.txt` с подтверждением.
 
-### 4.7 Protocol Copy
-- For processed recordings, protocol can be copied to clipboard via `Copy` button.
+### 4.7 Копирование протокола
+- Для обработанных записей доступно копирование протокола в буфер через кнопку `Copy`.
 
-### 4.8 Settings
-Available in main-window popup and menu settings:
-- Video quality
-- AI model
-- Set API key
-- Set Base URL (fallback to default if empty)
-- Edit system prompt
-- Open output folder
-- Token usage display (read-only)
+### 4.8 Настройки
+Доступно в popup настроек в основном окне и в menu settings:
+- Качество видео
+- AI модель
+- Установка API key
+- Установка Base URL (fallback на дефолт при пустом значении)
+- Редактирование системного промпта
+- Открытие папки вывода
+- Показ счетчиков токенов (read-only)
 
 ### 4.9 i18n
-- Locale auto-detection (NSLocale/env/locale fallback).
-- Supported languages:
-  - Russian (`ru`)
-  - English (`en`)
-- All major UI labels/messages are mapped through translation keys.
+- Автоопределение локали (NSLocale/env/locale fallback).
+- Поддерживаемые языки:
+  - Русский (`ru`)
+  - Английский (`en`)
+- Основные UI подписи/сообщения заведены через ключи переводов.
 
-### 4.10 Menu Bar / Dock Behavior
-- App is Dock-visible (`LSUIElement=False`).
-- rumps status item is programmatically removed after startup (`hide_status_bar_item`).
+### 4.10 Menu Bar / Dock поведение
+- Приложение видно в Dock (`LSUIElement=False`).
+- rumps status item программно скрывается после старта (`hide_status_bar_item`).
 
-## 5. Data Contracts
-- Recording entity: `<base>.mp4`
-- Optional mic file: `<base>_mic.m4a`
-- Optional protocol file: `<base>_protocol.txt`
-- Config file: `~/.recorder_app_config.json`
+## 5. Контракты данных
+- Сущность записи: `<base>.mp4`
+- Опциональный микрофонный файл: `<base>_mic.m4a`
+- Опциональный файл протокола: `<base>_protocol.txt`
+- Файл конфигурации: `~/.recorder_app_config.json`
 
-## 6. Non-Functional Requirements (Implemented)
-- Long operations are background-threaded (record start callbacks, permission refresh, AI processing).
-- UI refresh routed to main thread (`run_on_main`).
-- Errors surfaced via alerts/notifications and logs (`~/Library/Logs/Steno/app.log`).
+## 6. Нефункциональные требования (Реализовано)
+- Долгие операции вынесены в фоновые потоки (start callbacks, permission refresh, AI processing).
+- Обновление UI маршрутизируется в main thread (`run_on_main`).
+- Ошибки выводятся через alerts/notifications и пишутся в лог (`~/Library/Logs/Steno/app.log`).
 
-## 7. Build and Packaging
-- Entrypoint: `app.py`
-- py2app config: `setup.py`
-- Data files include icons and i18n YAMLs.
-- Python packages included: `steno`, `steno.ui`, `steno.services`.
+## 7. Сборка и упаковка
+- Точка входа: `app.py`
+- Конфигурация py2app: `setup.py`
+- В data files включены иконки и i18n YAML.
+- В сборку входят Python-пакеты: `steno`, `steno.ui`, `steno.services`.
 
-## 8. Backlog / Not Implemented from Earlier Plan
-These plan items are not implemented in current UI:
-- sidebar collapse/expand toggle with icon-only mode;
-- premium visual polish beyond native controls;
-- full removal of legacy permission-reset methods from code (methods exist, but reset options are removed from active settings UI paths).
+## 8. Бэклог / Не реализовано из раннего плана
+Эти пункты не реализованы в текущем UI:
+- toggle сворачивания/разворачивания sidebar с режимом только иконок;
+- premium-визуал сверх нативных контролов;
+- полное удаление legacy-методов reset permissions из кода (методы остаются, но reset-опции убраны из активных UI-путей настроек).
 
-## 9. Acceptance Snapshot (Current)
-Implemented and verified in code:
-- first-run explicit permissions flow;
-- responsive non-blocking windows;
-- recording and processing flows;
-- context menu actions for recordings;
-- editable per-recording prompt used as final `system_instruction`;
-- copy protocol action;
-- locale-based RU/EN UI;
-- modularized structure (`services`, `ui`, `config`, `i18n`).
+## 9. Снимок приемки (Текущее состояние)
+Реализовано и подтверждено кодом:
+- явный first-run flow выдачи разрешений;
+- отзывчивые неблокирующиеся окна;
+- сценарии записи и обработки;
+- действия контекстного меню для записей;
+- редактируемый prompt на запись, передаваемый как финальный `system_instruction`;
+- действие копирования протокола;
+- UI на RU/EN по локали;
+- модульная структура (`services`, `ui`, `config`, `i18n`).
+
+## 10. Будущее направление (Planned)
+- Ввести backend-сервис с авторизацией пользователей.
+- Добавить облачное хранение протоколов (минимальный scope).
+- Опционально поддержать загрузку/хранение raw-медиа (`.mp4`, `_mic.m4a`) отдельным этапом.
+
+## 11. Product Backlog (Requested)
+1. Переобработка той же записи с новым промптом и созданием дополнительной версии протокола.
+2. Интеграция веб-поиска для обогащения генерации протокола.
+3. Выделенный экран ошибок в приложении с понятной диагностикой и действиями восстановления.
+4. Retry/Resume для задач обработки после временных сбоев.
+5. Управление пресетами промптов (создание/редактирование/выбор шаблонов).
+6. Глобальные горячие клавиши Start/Stop записи.
+7. Экспорт протокола (например, Markdown/HTML/Confluence-friendly).
+8. Раздел healthcheck в Settings (статус permissions/API/config/dependencies).
+9. Автогенерация названия встречи/протокола.
+10. Таксономия записей: теги, папки и проекты.
+11. Политика автоочистки старых raw-медиа файлов.
+12. Безопасное хранение API key (предпочтительно macOS Keychain вместо открытого хранения в home-конфиге).
+13. Поддержка диаризации спикеров (определение участников в транскрипте/протоколе).

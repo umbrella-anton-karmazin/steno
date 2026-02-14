@@ -54,7 +54,7 @@ class MainWindowActionsMixin:
             return
         old_name = self.selected_recording
         self._remember_prompt_draft_for_selected()
-        renamed_to = self.app.recordings_service.rename_recording_interactive(old_name)
+        renamed_to = self.app.meetings_service.rename_recording_interactive(old_name)
         if renamed_to:
             old_draft = self.prompt_drafts.pop(old_name, None)
             if old_draft is not None:
@@ -69,7 +69,7 @@ class MainWindowActionsMixin:
         if not self.selected_recording:
             return
         target = self.selected_recording
-        if self.app.recordings_service.archive_recording_interactive(target):
+        if self.app.meetings_service.archive_recording_interactive(target):
             self.prompt_drafts.pop(target, None)
             if self.prompt_loaded_for == target:
                 self.prompt_loaded_for = None
@@ -83,7 +83,7 @@ class MainWindowActionsMixin:
         if not self.selected_recording:
             return
         target = self.selected_recording
-        if self.app.recordings_service.delete_recording_with_files_interactive(target):
+        if self.app.meetings_service.delete_recording_with_files_interactive(target):
             self.prompt_drafts.pop(target, None)
             if self.prompt_loaded_for == target:
                 self.prompt_loaded_for = None

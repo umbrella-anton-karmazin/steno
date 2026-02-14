@@ -19,7 +19,7 @@ Steno — это desktop-приложение для macOS (PyObjC + rumps), к�
 - `steno/services/permissions_service.py`: обертка системных API разрешений macOS.
 - `steno/services/recording_service.py`: orchestration старта/остановки записи.
 - `steno/services/processing_service.py`: AI-пайплайн и генерация протокола.
-- `steno/services/recordings_service.py`: список/rename/archive/delete записей.
+- `steno/services/meetings_service.py`: список/rename/archive/delete записей.
 - `steno/ui/permissions_window.py`: окно первого запуска для разрешений.
 - `steno/ui/main_window*.py`: main window, разделенный на view/state/actions.
 - `assets/i18n/*.yaml`: ключи переводов.

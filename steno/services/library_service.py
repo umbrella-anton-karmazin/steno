@@ -7,4 +7,4 @@ from steno.services.meetings_service import MeetingsService
 
 
 # Backward compatibility for older imports.
-RecordingsService = MeetingsService
+LibraryService = MeetingsService

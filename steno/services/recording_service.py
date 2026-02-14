@@ -102,6 +102,7 @@ class RecordingService:
                         # Сбрасываем UI в исходное состояние
                         self.app.is_waiting_permissions = False
                         self.app.is_recording = False
+                        self.app.recording_started_at = None
                         if sender:
                             sender.title = tr("main.start_recording")
                         self.app._set_start_stop_title("Start Recording")
@@ -117,11 +118,15 @@ class RecordingService:
                             return
                         self.app.is_waiting_permissions = False
                         self.app.is_recording = True
+                        self.app.recording_started_at = time.time()
                         if sender:
                             sender.title = tr("main.stop_recording")
                         self.app._set_start_stop_title("Stop")
                         self.app.set_state_icon("recording")
                         self.app.request_ui_refresh()
+                        if self.app.window_controller and self.app.current_filename:
+                            active_name = os.path.basename(self.app.current_filename)
+                            self.app.window_controller.focus_recording(active_name)
 
                     self.app.run_on_main(handle_success)
 
@@ -139,6 +144,7 @@ class RecordingService:
                         return
                     self.app.is_waiting_permissions = False
                     self.app.is_recording = False
+                    self.app.recording_started_at = None
                     self.app._set_start_stop_title("Start Recording")
                     self.app.set_state_icon("error")
                     self.app.request_ui_refresh()
@@ -154,6 +160,7 @@ class RecordingService:
         except Exception as e:
             logger.exception("Recording failed to start")
             self.app.is_waiting_permissions = False
+            self.app.recording_started_at = None
             rumps.alert(tr("common.error"), str(e))
             self.app.set_state_icon("error")
             self.app.request_ui_refresh()
@@ -165,6 +172,7 @@ class RecordingService:
             self.app.recorder.stop()
 
         self.app.is_recording = False
+        self.app.recording_started_at = None
         if sender:
             sender.title = tr("main.start_recording")
         self.app._set_start_stop_title("Start Recording")

@@ -24,7 +24,7 @@ from steno.i18n import tr
 from steno.services.permissions_service import PermissionManager
 from steno.services.processing_service import process_video_with_ai
 from steno.services.recording_service import RecordingService
-from steno.services.recordings_service import RecordingsService
+from steno.services.meetings_service import MeetingsService
 
 messageAuthor = 'v1.4'
 
@@ -108,11 +108,12 @@ class RecorderApp(rumps.App):
         self.is_waiting_permissions = False
         self.start_attempt_id = 0
         self.current_processing_file = None
+        self.recording_started_at = None
         self.status_item_hidden = False
         self.permissions_transition_started = False
         self.permission_manager = PermissionManager
         self.recording_service = RecordingService(self, HAS_PYOBJC)
-        self.recordings_service = RecordingsService(self, HAS_PYOBJC)
+        self.meetings_service = MeetingsService(self, HAS_PYOBJC)
         self.permission_controller = None
         self.window_controller = None
         
@@ -260,7 +261,7 @@ class RecorderApp(rumps.App):
            - Disable "Start Recording" (prevent recording during AI) -> BUT allow "Stop" if recording.
            
         2. If Recording (is_recording=True):
-           - Disable "Recent Recordings" (prevent AI during recording)
+           - Keep "Recent Recordings" enabled (allow processing other meetings during recording).
            - "Start Recording" becomes "Stop" and must remain enabled.
         """
         if not HAS_PYOBJC:
@@ -280,8 +281,8 @@ class RecorderApp(rumps.App):
         # Can we stop? Only if recording
         can_stop = self.is_recording
         
-        # Can we use Recent Recordings? Only if IDLE (not recording AND not processing)
-        can_use_recent = not (self.is_recording or self.is_processing or self.is_waiting_permissions)
+        # Can use Recent Recordings unless processing is already running.
+        can_use_recent = not (self.is_processing or self.is_waiting_permissions)
 
         idle_mode = not self.is_recording and not self.is_processing and not self.is_waiting_permissions
 
@@ -309,6 +310,8 @@ class RecorderApp(rumps.App):
             self.window_controller.refresh_from_state()
             if self.is_recording or self.current_processing_file:
                 self.window_controller.refresh_file_lists()
+            if self.is_recording:
+                self.window_controller.refresh_detail_view()
 
     def flash_error(self):
         def blink():
@@ -417,6 +420,14 @@ class RecorderApp(rumps.App):
     def request_flash_error(self):
         self.run_on_main(self.flash_error)
 
+    def get_live_recording_elapsed_seconds(self):
+        if not self.is_recording or self.recording_started_at is None:
+            return None
+        try:
+            return max(0, int(time.time() - float(self.recording_started_at)))
+        except Exception:
+            return None
+
     def update_token_stats(self):
         last = self.config.get("last_request_tokens", 0)
         total = self.config.get("used_tokens", 0)
@@ -523,7 +534,7 @@ class RecorderApp(rumps.App):
             for item_title in list(self.recent_recordings_menu.keys()):
                 del self.recent_recordings_menu[item_title]
             
-            recordings = self.recordings_service.list_recent_recordings(limit=10)
+            recordings = self.meetings_service.list_recent_recordings(limit=10)
             if recordings:
                 for f in recordings:
                     self.recent_recordings_menu.add(rumps.MenuItem(f, callback=self.process_selected_file))
@@ -534,7 +545,7 @@ class RecorderApp(rumps.App):
             for item_title in list(self.recent_protocols_menu.keys()):
                 del self.recent_protocols_menu[item_title]
 
-            protocols = self.recordings_service.list_recent_protocols(limit=10)
+            protocols = self.meetings_service.list_recent_protocols(limit=10)
             if protocols:
                 for f in protocols:
                     self.recent_protocols_menu.add(rumps.MenuItem(f, callback=self.open_protocol_file))

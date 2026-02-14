@@ -2,12 +2,74 @@ import os
 
 import objc
 from AppKit import NSColor
-from Foundation import NSIndexSet
+from Foundation import NSIndexSet, NSURL
+
+try:
+    from AVFoundation import AVURLAsset
+    from CoreMedia import CMTimeGetSeconds
+except Exception:
+    AVURLAsset = None
+    CMTimeGetSeconds = None
 
 from steno.i18n import tr
 
 
 class MainWindowStateMixin:
+    @objc.python_method
+    def _format_duration_for_ui(self, total_seconds):
+        if total_seconds is None:
+            return ""
+        total_seconds = max(0, int(total_seconds))
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        # Rule:
+        # - if hours exist: show HHч. MMм. (omit seconds)
+        # - otherwise: show MMм. SS с. (omit hours)
+        if hours > 0:
+            return f"{hours:02d}ч. {minutes:02d}м."
+        if minutes > 0:
+            return f"{minutes:02d}м. {seconds:02d} с."
+        return f"{seconds:02d} с."
+
+    @objc.python_method
+    def _video_duration_seconds(self, filename):
+        if not filename:
+            return None
+        if AVURLAsset is None or CMTimeGetSeconds is None:
+            return None
+
+        video_path = os.path.join(self.app.config["save_dir"], filename)
+        if not os.path.exists(video_path):
+            return None
+
+        try:
+            mtime = os.path.getmtime(video_path)
+        except Exception:
+            mtime = None
+
+        cache = getattr(self, "video_duration_cache", None)
+        if isinstance(cache, dict):
+            cached = cache.get(filename)
+            if cached and cached[0] == mtime:
+                return cached[1]
+        else:
+            self.video_duration_cache = {}
+            cache = self.video_duration_cache
+
+        duration_seconds = None
+        try:
+            asset = AVURLAsset.URLAssetWithURL_options_(NSURL.fileURLWithPath_(video_path), None)
+            seconds = CMTimeGetSeconds(asset.duration())
+            if seconds == seconds and seconds >= 0:  # NaN-safe check
+                duration_seconds = int(round(float(seconds)))
+        except Exception:
+            duration_seconds = None
+
+        cache[filename] = (mtime, duration_seconds)
+        return duration_seconds
+
     @objc.python_method
     def _estimate_prompt_height(self):
         minimum = 120.0
@@ -35,7 +97,7 @@ class MainWindowStateMixin:
         bottom_pad = 24.0
 
         title_h = 28.0
-        files_h = 54.0
+        files_h = 76.0
         controls_h = 30.0
         prompt_label_h = 24.0
         hint_h = 18.0
@@ -181,7 +243,7 @@ class MainWindowStateMixin:
 
     @objc.python_method
     def refresh_file_lists(self):
-        self.recording_files = self.app.recordings_service.list_recent_recordings(limit=200)
+        self.recording_files = self.app.meetings_service.list_recent_recordings(limit=200)
         if self.app.current_filename:
             active_name = os.path.basename(self.app.current_filename)
             if active_name and active_name not in self.recording_files:
@@ -232,7 +294,17 @@ class MainWindowStateMixin:
         display_name = self._display_meeting_name(video_name)
         self.detail_title_label.setStringValue_(display_name)
         audio_label = mic_name if os.path.exists(mic_path) else tr("main.audio_missing")
-        self.files_label.setStringValue_(tr("main.files_line", video=video_name, audio=audio_label))
+        files_text = tr("main.files_line", video=video_name, audio=audio_label)
+        if status == "recording" and self._is_recording_file(video_name):
+            duration_seconds = self.app.get_live_recording_elapsed_seconds()
+        else:
+            duration_seconds = self._video_duration_seconds(video_name)
+        if duration_seconds is not None:
+            files_text += "\n" + tr(
+                "main.duration_line",
+                duration=self._format_duration_for_ui(duration_seconds),
+            )
+        self.files_label.setStringValue_(files_text)
 
         if status == "processing":
             self.process_button.setHidden_(False)
@@ -244,7 +316,7 @@ class MainWindowStateMixin:
             self.loader.startAnimation_(None)
         elif status == "unprocessed":
             self.process_button.setHidden_(False)
-            self.process_button.setEnabled_(not self.app.is_processing and not self.app.is_recording)
+            self.process_button.setEnabled_(not self.app.is_processing)
             self.copy_protocol_button.setHidden_(True)
             self.prompt_label.setHidden_(False)
             self.prompt_scroll.setHidden_(False)
@@ -274,6 +346,8 @@ class MainWindowStateMixin:
                 self.protocol_text.setString_(tr("main.protocol_read_error", error=e))
         elif status == "processing":
             self.protocol_text.setString_(tr("main.processing_in_progress"))
+        elif status == "recording":
+            self.protocol_text.setString_(tr("main.recording_in_progress"))
         else:
             self.protocol_text.setString_(tr("main.no_protocol"))
 
@@ -296,5 +370,23 @@ class MainWindowStateMixin:
         self._remember_prompt_draft_for_selected()
         self.selected_recording = self.recording_files[row]
         self.prompt_loaded_for = None
+        self.refresh_detail_view()
+        self._update_recordings_context_menu_state()
+
+    @objc.python_method
+    def focus_recording(self, filename):
+        if not filename:
+            return
+        self._remember_prompt_draft_for_selected()
+        self.refresh_file_lists()
+        if filename not in self.recording_files:
+            return
+        self.selected_recording = filename
+        self.prompt_loaded_for = None
+        idx = self.recording_files.index(filename)
+        self.recordings_table.selectRowIndexes_byExtendingSelection_(
+            NSIndexSet.indexSetWithIndex_(idx),
+            False,
+        )
         self.refresh_detail_view()
         self._update_recordings_context_menu_state()

@@ -20,6 +20,7 @@ class MainWindowController(
             self.selected_recording = None
             self.prompt_drafts = {}
             self.prompt_loaded_for = None
+            self.video_duration_cache = {}
             self.build_window()
         return self
 
