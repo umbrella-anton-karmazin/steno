@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
+
 APP_NAME="${APP_NAME:-Steno}"
 if [ -z "${PYTHON_BIN+x}" ]; then
   PYTHON_BIN="python3"
@@ -80,6 +84,6 @@ if [ ! -d "$APP_PATH" ]; then
 fi
 
 DMG_NAME="${DMG_NAME:-${APP_NAME}-${ARCH}.dmg}"
-APP_NAME="$APP_NAME" APP_PATH="$APP_PATH" DMG_NAME="$DMG_NAME" ./build_dmg.sh
+APP_NAME="$APP_NAME" APP_PATH="$APP_PATH" DMG_NAME="$DMG_NAME" "$SCRIPT_DIR/build_dmg.sh"
 
 echo "--- Готово: ${DMG_NAME} ---"

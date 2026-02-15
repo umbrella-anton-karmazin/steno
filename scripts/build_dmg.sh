@@ -1,11 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
+
 # Настройки путей
 APP_NAME="${APP_NAME:-Steno}"
 APP_PATH="${APP_PATH:-dist/${APP_NAME}.app}"
 DMG_NAME="${DMG_NAME:-${APP_NAME}.dmg}"
-BACKGROUND_PATH="${BACKGROUND_PATH:-assets/install.tiff}"
+BACKGROUND_PATH="${BACKGROUND_PATH:-src/steno_app/assets/install.tiff}"
 
 echo "--- Начинаем сборку $APP_NAME ---"
 

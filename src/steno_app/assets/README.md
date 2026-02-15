@@ -1,10 +1,10 @@
 # Инструкция по работе с иконками и сборке приложения
 
-В этом проекте для управления иконками используется папка `assets/`.
+В этом проекте для управления иконками используется папка `src/steno_app/assets/`.
 
 ## 1. Требования к иконкам для системного трея (меню-бара)
 
-Чтобы вместо текста "Rec" в трее отображались иконки, добавьте в папку `assets/` два файла:
+Чтобы вместо текста "Rec" в трее отображались иконки, добавьте в папку `src/steno_app/assets/` файлы:
 1.  **`icon_idle.png`** — отображается, когда запись не ведется.
 2.  **`icon_recording.png`** — отображается во время записи.
 3.  **`icon_processing.png`** — отображается, когда ИИ обрабатывает видео и готовит протокол.
@@ -23,7 +23,7 @@
 При сборке приложения (в `.app` или `.exe`) используется отдельный файл иконки.
 
 ### Куда сохранить:
-Положите основной логотип в `assets/app_icon.icns` (для macOS) или `assets/app_icon.ico` (для Windows).
+Положите основной логотип в `src/steno_app/assets/app_icon.icns` (для macOS) или `src/steno_app/assets/app_icon.ico` (для Windows).
 
 ### Как использовать при сборке:
 
@@ -32,7 +32,7 @@
 ```python
 OPTIONS = {
     'argv_emulation': True,
-    'iconfile': 'assets/app_icon.icns',
+    'iconfile': 'src/steno_app/assets/app_icon.icns',
     'plist': {
         'LSUIElement': True, # Скрывает иконку из Дока (оставляет только в трее)
     }
@@ -42,8 +42,8 @@ OPTIONS = {
 #### Если используете `PyInstaller`:
 Запускайте сборку с флагом `--icon`:
 ```bash
-pyinstaller --noconsole --onefile --icon=assets/app_icon.icns app.py
+pyinstaller --noconsole --onefile --icon=src/steno_app/assets/app_icon.icns app.py
 ```
 
 ## 3. Проверка в коде
-Приложение автоматически проверяет наличие файлов `assets/icon_idle.png` и `assets/icon_recording.png`. Если их нет — будет отображаться стандартный текст "Rec" и "🔴 Rec".
+Приложение автоматически проверяет наличие файлов `src/steno_app/assets/icon_idle.png` и `src/steno_app/assets/icon_recording.png`. Если их нет — будет отображаться стандартный текст "Rec" и "🔴 Rec".

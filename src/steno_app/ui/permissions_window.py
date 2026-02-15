@@ -18,7 +18,7 @@ from AppKit import (
 )
 from Foundation import NSObject
 
-from steno.i18n import tr
+from steno_app.i18n import tr
 
 
 logger = logging.getLogger("Steno")

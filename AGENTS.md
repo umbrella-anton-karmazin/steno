@@ -12,17 +12,17 @@ Steno — это desktop-приложение для macOS (PyObjC + rumps), к�
 
 ## Архитектура
 Текущая структура:
-- `app.py`: координатор приложения, жизненный цикл, меню, high-level состояние.
-- `recorder.py`: низкоуровневый native pipeline захвата (`ScreenRecorder`).
-- `steno/config.py`: константы, дефолты, сохранение/загрузка конфига.
-- `steno/i18n.py`: определение локали + flat YAML переводчик.
-- `steno/services/permissions_service.py`: обертка системных API разрешений macOS.
-- `steno/services/recording_service.py`: orchestration старта/остановки записи.
-- `steno/services/processing_service.py`: AI-пайплайн и генерация протокола.
-- `steno/services/meetings_service.py`: список/rename/archive/delete записей.
-- `steno/ui/permissions_window.py`: окно первого запуска для разрешений.
-- `steno/ui/main_window*.py`: main window, разделенный на view/state/actions.
-- `assets/i18n/*.yaml`: ключи переводов.
+- `src/steno_app/app.py`: координатор приложения, жизненный цикл, меню, high-level состояние.
+- `src/steno_app/recorder.py`: низкоуровневый native pipeline захвата (`ScreenRecorder`).
+- `src/steno_app/config.py`: константы, дефолты, сохранение/загрузка конфига.
+- `src/steno_app/i18n.py`: определение локали + flat YAML переводчик.
+- `src/steno_app/services/permissions_service.py`: обертка системных API разрешений macOS.
+- `src/steno_app/services/recording_service.py`: orchestration старта/остановки записи.
+- `src/steno_app/services/processing_service.py`: AI-пайплайн и генерация протокола.
+- `src/steno_app/services/meetings_service.py`: список/rename/archive/delete записей.
+- `src/steno_app/ui/permissions_window.py`: окно первого запуска для разрешений.
+- `src/steno_app/ui/main_window*.py`: main window, разделенный на view/state/actions.
+- `src/steno_app/assets/i18n/*.yaml`: ключи переводов.
 
 ## Базовые принципы
 - Держать решения простыми и читаемыми.
@@ -54,12 +54,12 @@ Steno — это desktop-приложение для macOS (PyObjC + rumps), к�
 
 ## Правила i18n
 - Все пользовательские строки должны идти через `tr("...")`.
-- Новые ключи добавлять одновременно в `assets/i18n/ru.yaml` и `assets/i18n/en.yaml`.
+- Новые ключи добавлять одновременно в `src/steno_app/assets/i18n/ru.yaml` и `src/steno_app/assets/i18n/en.yaml`.
 - Имена ключей должны быть стабильными и сгруппированными по фичам (`main.*`, `menu.*`, `record.*` и т.д.).
 
 ## Правила конфига
 - Сохранять конфиг только через `ConfigManager.save`.
-- Новые ключи добавлять в `DEFAULT_CONFIG` в `steno/config.py`.
+- Новые ключи добавлять в `DEFAULT_CONFIG` в `src/steno_app/config.py`.
 - Сохранять обратную совместимость с уже существующими конфигами.
 
 ## Runtime-пути
@@ -74,12 +74,12 @@ Steno — это desktop-приложение для macOS (PyObjC + rumps), к�
 ## Запуск и сборка
 Запуск из исходников:
 ```bash
-./.venv/bin/python app.py
+PYTHONPATH=src ./.venv/bin/python -m steno_app.app
 ```
 
 Проверка синтаксиса:
 ```bash
-python3 -m py_compile app.py steno/**/*.py
+python3 -m py_compile setup.py $(find src/steno_app -name '*.py' -print)
 ```
 
 Сборка (только по явному запросу):

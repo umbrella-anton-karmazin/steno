@@ -1,8 +1,10 @@
 import os
+import re
 
 import objc
-from AppKit import NSColor
-from Foundation import NSIndexSet, NSURL
+import rumps
+from AppKit import NSColor, NSFont, NSFontAttributeName
+from Foundation import NSIndexSet, NSMutableAttributedString, NSURL
 
 try:
     from AVFoundation import AVURLAsset
@@ -11,10 +13,178 @@ except Exception:
     AVURLAsset = None
     CMTimeGetSeconds = None
 
-from steno.i18n import tr
+from steno_app.i18n import tr
+from steno_app.ui.main_window_view import SidebarRecordingCellView, SidebarRecordingRowView
 
 
 class MainWindowStateMixin:
+    @objc.python_method
+    def _is_table_line(self, line):
+        stripped = (line or "").strip()
+        return stripped.count("|") >= 2
+
+    @objc.python_method
+    def _split_table_row(self, line):
+        row = str(line or "").strip()
+        if row.startswith("|"):
+            row = row[1:]
+        if row.endswith("|"):
+            row = row[:-1]
+        return [c.strip() for c in row.split("|")]
+
+    @objc.python_method
+    def _is_table_separator_row(self, cells):
+        if not cells:
+            return False
+        for c in cells:
+            cleaned = c.replace("-", "").replace(":", "").replace(" ", "")
+            if cleaned:
+                return False
+        return True
+
+    @objc.python_method
+    def _format_markdown_table_block(self, lines):
+        rows = [self._split_table_row(line) for line in lines]
+        rows = [r for r in rows if r]
+        if not rows:
+            return lines
+
+        widths = []
+        for row in rows:
+            if len(row) > len(widths):
+                widths.extend([0] * (len(row) - len(widths)))
+            for i, cell in enumerate(row):
+                widths[i] = max(widths[i], len(cell))
+
+        out = []
+        for row in rows:
+            if self._is_table_separator_row(row):
+                sep = ["-" * max(3, widths[i]) for i in range(len(widths))]
+                out.append("| " + " | ".join(sep) + " |")
+                continue
+            padded = []
+            for i in range(len(widths)):
+                value = row[i] if i < len(row) else ""
+                padded.append(value.ljust(widths[i]))
+            out.append("| " + " | ".join(padded) + " |")
+        return out
+
+    @objc.python_method
+    def _apply_inline_bold(self, line):
+        text = str(line or "")
+        spans = []
+        out = []
+        i = 0
+        out_len = 0
+        while i < len(text):
+            if text.startswith("**", i):
+                end = text.find("**", i + 2)
+                if end != -1:
+                    chunk = text[i + 2 : end]
+                    start = out_len
+                    out.append(chunk)
+                    out_len += len(chunk)
+                    spans.append((start, len(chunk)))
+                    i = end + 2
+                    continue
+            out.append(text[i])
+            out_len += 1
+            i += 1
+        return "".join(out), spans
+
+    @objc.python_method
+    def _build_markdown_attributed(self, text):
+        source = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+        lines = source.split("\n")
+
+        # Pre-format markdown table blocks for monospaced rendering.
+        normalized_lines = []
+        i = 0
+        while i < len(lines):
+            if self._is_table_line(lines[i]):
+                j = i
+                block = []
+                while j < len(lines) and self._is_table_line(lines[j]):
+                    block.append(lines[j])
+                    j += 1
+                normalized_lines.extend(self._format_markdown_table_block(block))
+                i = j
+                continue
+            normalized_lines.append(lines[i])
+            i += 1
+
+        # Build plain text + style ranges.
+        output_lines = []
+        heading_ranges = []
+        bold_ranges = []
+        table_ranges = []
+        cursor = 0
+        for line in normalized_lines:
+            original = line
+            heading_level = 0
+            stripped = line.lstrip()
+            leading = len(line) - len(stripped)
+            if stripped.startswith("### "):
+                heading_level = 3
+                line = (" " * leading) + stripped[4:]
+            elif stripped.startswith("## "):
+                heading_level = 2
+                line = (" " * leading) + stripped[3:]
+            elif stripped.startswith("# "):
+                heading_level = 1
+                line = (" " * leading) + stripped[2:]
+
+            is_table = self._is_table_line(original)
+            clean, inline_spans = self._apply_inline_bold(line if not is_table else original)
+            output_lines.append(clean)
+            line_len = len(clean)
+
+            if heading_level > 0 and line_len > 0:
+                heading_ranges.append((cursor, line_len, heading_level))
+            if is_table and line_len > 0:
+                table_ranges.append((cursor, line_len))
+            for start, length in inline_spans:
+                if length > 0:
+                    bold_ranges.append((cursor + start, length))
+
+            cursor += line_len + 1  # include trailing newline after each line
+
+        final_text = "\n".join(output_lines)
+        attr = NSMutableAttributedString.alloc().initWithString_(final_text)
+
+        base_font = NSFont.systemFontOfSize_(13.0)
+        bold_font = NSFont.boldSystemFontOfSize_(13.0)
+        h1_font = NSFont.boldSystemFontOfSize_(24.0)
+        h2_font = NSFont.boldSystemFontOfSize_(20.0)
+        h3_font = NSFont.boldSystemFontOfSize_(16.0)
+        mono_font = NSFont.userFixedPitchFontOfSize_(12.5) or NSFont.systemFontOfSize_(12.5)
+
+        full_len = len(final_text)
+        if full_len > 0:
+            attr.addAttribute_value_range_(NSFontAttributeName, base_font, (0, full_len))
+
+        for start, length in bold_ranges:
+            attr.addAttribute_value_range_(NSFontAttributeName, bold_font, (start, length))
+        for start, length in table_ranges:
+            attr.addAttribute_value_range_(NSFontAttributeName, mono_font, (start, length))
+        for start, length, level in heading_ranges:
+            font = h1_font if level == 1 else h2_font if level == 2 else h3_font
+            attr.addAttribute_value_range_(NSFontAttributeName, font, (start, length))
+
+        return attr
+
+    @objc.python_method
+    def _set_protocol_text(self, text, parse_markdown=True):
+        value = str(text or "")
+        if parse_markdown and value:
+            try:
+                attributed = self._build_markdown_attributed(value)
+                self.protocol_text.textStorage().setAttributedString_(attributed)
+                return
+            except Exception:
+                pass
+        self.protocol_text.setString_(value)
+
     @objc.python_method
     def _format_duration_for_ui(self, total_seconds):
         if total_seconds is None:
@@ -221,19 +391,12 @@ class MainWindowStateMixin:
     @objc.python_method
     def refresh_from_state(self):
         if self.app.is_recording:
-            self.recording_dot_view.layer().setBackgroundColor_(NSColor.systemRedColor().CGColor())
-            self.recording_dot_view.setHidden_(False)
             self.start_stop_button.setTitle_(tr("main.stop_recording"))
         elif self.app.is_waiting_permissions:
-            self.recording_dot_view.layer().setBackgroundColor_(NSColor.systemOrangeColor().CGColor())
-            self.recording_dot_view.setHidden_(False)
             self.start_stop_button.setTitle_(tr("main.starting"))
         elif self.app.is_processing:
-            self.recording_dot_view.layer().setBackgroundColor_(NSColor.systemOrangeColor().CGColor())
-            self.recording_dot_view.setHidden_(False)
             self.start_stop_button.setTitle_(tr("main.start_recording"))
         else:
-            self.recording_dot_view.setHidden_(True)
             self.start_stop_button.setTitle_(tr("main.start_recording"))
 
         self.start_stop_button.setEnabled_(
@@ -270,7 +433,7 @@ class MainWindowStateMixin:
             self.prompt_hint_label.setHidden_(True)
             self.prompt_loaded_for = None
             self.loader.stopAnimation_(None)
-            self.protocol_text.setString_(tr("main.select_recording_hint"))
+            self._set_protocol_text(tr("main.select_recording_hint"), parse_markdown=False)
             return
 
         video_name = self.selected_recording
@@ -341,15 +504,15 @@ class MainWindowStateMixin:
         if os.path.exists(protocol_path):
             try:
                 with open(protocol_path, "r", encoding="utf-8") as f:
-                    self.protocol_text.setString_(f.read())
+                    self._set_protocol_text(f.read(), parse_markdown=True)
             except Exception as e:
-                self.protocol_text.setString_(tr("main.protocol_read_error", error=e))
+                self._set_protocol_text(tr("main.protocol_read_error", error=e), parse_markdown=False)
         elif status == "processing":
-            self.protocol_text.setString_(tr("main.processing_in_progress"))
+            self._set_protocol_text(tr("main.processing_in_progress"), parse_markdown=False)
         elif status == "recording":
-            self.protocol_text.setString_(tr("main.recording_in_progress"))
+            self._set_protocol_text(tr("main.recording_in_progress"), parse_markdown=False)
         else:
-            self.protocol_text.setString_(tr("main.no_protocol"))
+            self._set_protocol_text(tr("main.no_protocol"), parse_markdown=False)
 
     def numberOfRowsInTableView_(self, _):
         return len(self.recording_files)
@@ -359,8 +522,50 @@ class MainWindowStateMixin:
             return ""
         return self._display_title_for_recording(self.recording_files[row])
 
-    def tableView_shouldEditTableColumn_row_(self, _, __, ___):
-        return False
+    def tableView_viewForTableColumn_row_(self, table, _, row):
+        if row < 0 or row >= len(self.recording_files):
+            return None
+
+        identifier = "recordingCellView"
+        cell = table.makeViewWithIdentifier_owner_(identifier, self)
+        if cell is None:
+            cell = SidebarRecordingCellView.alloc().initWithFrame_(
+                ((0.0, 0.0), (float(table.bounds()[1][0]), float(table.rowHeight() or 34.0)))
+            )
+            cell.setIdentifier_(identifier)
+        filename = self.recording_files[row]
+        is_editing_row = (
+            self.inline_rename_row == row
+            and self.inline_rename_filename == filename
+        )
+
+        if is_editing_row:
+            cell.setTitle_(self._display_meeting_name(filename))
+            cell.text_label.setEditable_(True)
+            cell.text_label.setSelectable_(True)
+            cell.text_label.setDelegate_(self)
+            cell.text_label.setTag_(row)
+        else:
+            cell.setTitle_(self._display_title_for_recording(filename))
+            cell.text_label.setEditable_(False)
+            cell.text_label.setSelectable_(False)
+            cell.text_label.setDelegate_(None)
+        return cell
+
+    def tableView_shouldEditTableColumn_row_(self, _, __, row):
+        return bool(self.inline_rename_row == row)
+
+    def tableView_setObjectValue_forTableColumn_row_(self, _, value, __, row):
+        if self.inline_rename_in_commit:
+            return
+        if row < 0 or row >= len(self.recording_files):
+            return
+        if self.inline_rename_row != row:
+            return
+        self._finish_inline_rename(str(value) if value is not None else "")
+
+    def tableView_rowViewForRow_(self, _, __):
+        return SidebarRecordingRowView.alloc().init()
 
     def tableViewSelectionDidChange_(self, _):
         row = self.recordings_table.selectedRow()
@@ -390,3 +595,85 @@ class MainWindowStateMixin:
         )
         self.refresh_detail_view()
         self._update_recordings_context_menu_state()
+
+    @objc.python_method
+    def start_inline_rename_for_selected(self):
+        if not self.selected_recording:
+            return
+        if self.selected_recording not in self.recording_files:
+            return
+        self.start_inline_rename_for_row(self.recording_files.index(self.selected_recording))
+
+    @objc.python_method
+    def start_inline_rename_for_row(self, row):
+        if row < 0 or row >= len(self.recording_files):
+            return
+
+        filename = self.recording_files[row]
+        status = self._status_for_recording(filename)
+        if status == "recording":
+            rumps.alert(tr("blocked.title"), tr("blocked.recording"))
+            return
+        if status == "processing":
+            rumps.alert(tr("blocked.title"), tr("blocked.processing"))
+            return
+
+        self.inline_rename_row = row
+        self.inline_rename_filename = filename
+        self.inline_rename_field = None
+        self.recordings_table.reloadData()
+        self.recordings_table.selectRowIndexes_byExtendingSelection_(NSIndexSet.indexSetWithIndex_(row), False)
+
+        def begin_edit():
+            try:
+                self.recordings_table.editColumn_row_withEvent_select_(0, row, None, True)
+                cell = self.recordings_table.viewAtColumn_row_makeIfNecessary_(0, row, True)
+                if cell is not None:
+                    field = getattr(cell, "text_label", None)
+                    if field is not None:
+                        field.setDelegate_(self)
+                        field.setTag_(row)
+                        self.inline_rename_field = field
+            except Exception:
+                pass
+
+        self.app.run_on_main(begin_edit)
+
+    @objc.python_method
+    def _finish_inline_rename(self, new_value):
+        if self.inline_rename_in_commit:
+            return
+        old_name = self.inline_rename_filename
+        if not old_name:
+            return
+        self.inline_rename_in_commit = True
+        self.inline_rename_row = None
+        self.inline_rename_filename = None
+        self.inline_rename_field = None
+
+        renamed_to = self.app.meetings_service.rename_recording(old_name, new_value)
+        if renamed_to:
+            old_draft = self.prompt_drafts.pop(old_name, None)
+            if old_draft is not None:
+                self.prompt_drafts[renamed_to] = old_draft
+            self.selected_recording = renamed_to
+            self.prompt_loaded_for = None
+
+        self.refresh_from_state()
+        self.refresh_file_lists()
+        self.refresh_detail_view()
+        self.inline_rename_in_commit = False
+
+    def controlTextDidEndEditing_(self, notification):
+        if self.inline_rename_in_commit:
+            return
+        if self.inline_rename_row is None or not self.inline_rename_filename:
+            return
+        try:
+            field = notification.object()
+            if self.inline_rename_field is not None and field != self.inline_rename_field:
+                return
+            new_value = str(field.stringValue())
+        except Exception:
+            return
+        self._finish_inline_rename(new_value)

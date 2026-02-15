@@ -4,8 +4,8 @@ import rumps
 from AppKit import NSApp, NSMenu, NSMenuItem, NSPasteboard, NSPasteboardTypeString
 from Foundation import NSIndexSet
 
-from steno.config import AI_MODELS, VIDEO_QUALITY_PRESETS
-from steno.i18n import tr
+from steno_app.config import AI_MODELS, VIDEO_QUALITY_PRESETS
+from steno_app.i18n import tr
 
 
 class MainWindowActionsMixin:
@@ -50,20 +50,7 @@ class MainWindowActionsMixin:
             rumps.alert(tr("copy.error_title"), str(e))
 
     def onContextRename_(self, _):
-        if not self.selected_recording:
-            return
-        old_name = self.selected_recording
-        self._remember_prompt_draft_for_selected()
-        renamed_to = self.app.meetings_service.rename_recording_interactive(old_name)
-        if renamed_to:
-            old_draft = self.prompt_drafts.pop(old_name, None)
-            if old_draft is not None:
-                self.prompt_drafts[renamed_to] = old_draft
-            self.selected_recording = renamed_to
-            self.prompt_loaded_for = None
-        self.refresh_from_state()
-        self.refresh_file_lists()
-        self.refresh_detail_view()
+        self.start_inline_rename_for_selected()
 
     def onContextArchive_(self, _):
         if not self.selected_recording:
@@ -167,6 +154,14 @@ class MainWindowActionsMixin:
 
     def onOpenLink_(self, _):
         self.app.open_link(None)
+
+    def onRecordingsDoubleClick_(self, _):
+        row = self.recordings_table.clickedRow()
+        if row < 0:
+            row = self.recordings_table.selectedRow()
+        if row < 0:
+            return
+        self.start_inline_rename_for_row(row)
 
     def menuWillOpen_(self, menu):
         if menu != getattr(self, "recordings_context_menu", None):

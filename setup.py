@@ -5,21 +5,28 @@ Usage:
     python setup.py py2app
 """
 
-from setuptools import setup
 import os
+import sys
 
-APP = ['app.py']
+from setuptools import find_packages, setup
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+SRC_DIR = os.path.join(ROOT_DIR, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
+APP = ['src/steno_app/app.py']
 DATA_FILES = [
     ('assets', [
-        'assets/icon_idle.png',
-        'assets/icon_recording.png',
-        'assets/icon_processing.png',
-        'assets/icon_error.png',
-        'assets/app_icon.icns.icns'
+        'src/steno_app/assets/icon_idle.png',
+        'src/steno_app/assets/icon_recording.png',
+        'src/steno_app/assets/icon_processing.png',
+        'src/steno_app/assets/icon_error.png',
+        'src/steno_app/assets/app_icon.icns.icns'
     ]),
     ('assets/i18n', [
-        'assets/i18n/en.yaml',
-        'assets/i18n/ru.yaml',
+        'src/steno_app/assets/i18n/en.yaml',
+        'src/steno_app/assets/i18n/ru.yaml',
     ]),
 ]
 
@@ -35,9 +42,9 @@ OPTIONS = {
         'NSMicrophoneUsageDescription': "Приложение записывает звук микрофона во время встреч.",
         'NSScreenCaptureUsageDescription': "Приложение записывает экран для сохранения видео встреч.",
     },
-    'packages': ['rumps', 'certifi', 'objc', 'AVFoundation', 'Quartz', 'ApplicationServices', 'AppKit', 'Foundation', 'steno', 'steno.ui', 'steno.services'],
+    'packages': ['rumps', 'certifi', 'objc', 'AVFoundation', 'Quartz', 'ApplicationServices', 'AppKit', 'Foundation', 'steno_app', 'steno_app.ui', 'steno_app.services'],
     'includes': ['google.genai'],
-    'iconfile': 'assets/app_icon.icns.icns',
+    'iconfile': 'src/steno_app/assets/app_icon.icns.icns',
 }
 
 setup(
@@ -45,5 +52,7 @@ setup(
     name="Steno",
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
     setup_requires=['py2app'],
 )

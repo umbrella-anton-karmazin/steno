@@ -1,7 +1,7 @@
 import locale as py_locale
 import os
 
-from steno.config import ASSETS_DIR
+from steno_app.config import ASSETS_DIR
 
 
 try:

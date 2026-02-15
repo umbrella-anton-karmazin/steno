@@ -10,7 +10,7 @@ import certifi
 import shutil
 import logging
 
-from steno.config import (
+from steno_app.config import (
     AI_MODELS,
     DEFAULT_CONFIG,
     ICON_ERROR,
@@ -20,11 +20,11 @@ from steno.config import (
     VIDEO_QUALITY_PRESETS,
     ConfigManager,
 )
-from steno.i18n import tr
-from steno.services.permissions_service import PermissionManager
-from steno.services.processing_service import process_video_with_ai
-from steno.services.recording_service import RecordingService
-from steno.services.meetings_service import MeetingsService
+from steno_app.i18n import tr
+from steno_app.services.permissions_service import PermissionManager
+from steno_app.services.processing_service import process_video_with_ai
+from steno_app.services.recording_service import RecordingService
+from steno_app.services.meetings_service import MeetingsService
 
 messageAuthor = 'v1.4'
 
@@ -87,9 +87,9 @@ os.environ['SSL_CERT_FILE'] = certifi.where()
 os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
 
 if HAS_PYOBJC:
-    from steno.ui.main_window import MainWindowController
-    from steno.ui.menu_delegate import MenuDelegate
-    from steno.ui.permissions_window import PermissionWindowController
+    from steno_app.ui.main_window import MainWindowController
+    from steno_app.ui.menu_delegate import MenuDelegate
+    from steno_app.ui.permissions_window import PermissionWindowController
 else:
     MainWindowController = None
     MenuDelegate = None

@@ -8,8 +8,8 @@ import rumps
 from google import genai
 from google.genai import types
 
-from steno.config import ConfigManager
-from steno.i18n import tr
+from steno_app.config import ConfigManager
+from steno_app.i18n import tr
 
 
 logger = logging.getLogger("Steno")

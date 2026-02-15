@@ -3,8 +3,8 @@ import re
 
 import rumps
 
-from steno.config import ConfigManager
-from steno.i18n import tr
+from steno_app.config import ConfigManager
+from steno_app.i18n import tr
 
 
 try:
@@ -114,8 +114,16 @@ class MeetingsService:
         result = w.run()
         if not result.clicked:
             return None
+        return self.rename_recording(filename, result.text)
 
-        new_base = self._sanitize_recording_base_name(result.text)
+    def rename_recording(self, filename, raw_new_name):
+        if not filename:
+            return None
+        if self._is_recording_locked_for_edit(filename):
+            return None
+
+        current_base = os.path.splitext(filename)[0]
+        new_base = self._sanitize_recording_base_name(raw_new_name)
         if not new_base:
             rumps.alert(tr("rename.error_title"), tr("rename.error_empty"))
             return None

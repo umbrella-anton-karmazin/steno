@@ -7,9 +7,9 @@ from datetime import datetime
 import rumps
 from Foundation import NSURL
 
-from recorder import ScreenRecorder
-from steno.config import ConfigManager, VIDEO_QUALITY_PRESETS
-from steno.i18n import tr
+from steno_app.recorder import ScreenRecorder
+from steno_app.config import ConfigManager, VIDEO_QUALITY_PRESETS
+from steno_app.i18n import tr
 
 
 logger = logging.getLogger("Steno")

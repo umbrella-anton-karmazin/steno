@@ -3,7 +3,7 @@
 ## 1. Область документа
 Этот документ описывает текущее реализованное состояние кодовой базы после рефакторинга UI/архитектуры.
 Основан на:
-- текущем исходном коде в `app.py`, `recorder.py`, `steno/*`;
+- текущем исходном коде в `src/steno_app/*`;
 - реализованных частях предыдущего плана из ранней версии `SPEC.md`.
 
 ## 2. Цели продукта (Реализовано)
@@ -16,23 +16,23 @@
 
 ## 3. Текущая архитектура
 - Координатор:
-  - `app.py` (`RecorderApp`) управляет жизненным циклом приложения, меню, таймерами и глобальным состоянием.
+  - `src/steno_app/app.py` (`RecorderApp`) управляет жизненным циклом приложения, меню, таймерами и глобальным состоянием.
 - Сервисы:
-  - `steno/services/permissions_service.py` (`PermissionManager`)
-  - `steno/services/recording_service.py` (`RecordingService`)
-  - `steno/services/processing_service.py` (`process_video_with_ai`)
-  - `steno/services/meetings_service.py` (`MeetingsService`)
+  - `src/steno_app/services/permissions_service.py` (`PermissionManager`)
+  - `src/steno_app/services/recording_service.py` (`RecordingService`)
+  - `src/steno_app/services/processing_service.py` (`process_video_with_ai`)
+  - `src/steno_app/services/meetings_service.py` (`MeetingsService`)
 - UI:
-  - `steno/ui/permissions_window.py`
-  - `steno/ui/main_window.py` (ObjC-обертка, безопасная для selector-методов)
-  - `steno/ui/main_window_view.py`
-  - `steno/ui/main_window_state.py`
-  - `steno/ui/main_window_actions.py`
-  - `steno/ui/menu_delegate.py`
+  - `src/steno_app/ui/permissions_window.py`
+  - `src/steno_app/ui/main_window.py` (ObjC-обертка, безопасная для selector-методов)
+  - `src/steno_app/ui/main_window_view.py`
+  - `src/steno_app/ui/main_window_state.py`
+  - `src/steno_app/ui/main_window_actions.py`
+  - `src/steno_app/ui/menu_delegate.py`
 - Конфиг/i18n:
-  - `steno/config.py`
-  - `steno/i18n.py`
-  - `assets/i18n/en.yaml`, `assets/i18n/ru.yaml`
+  - `src/steno_app/config.py`
+  - `src/steno_app/i18n.py`
+  - `src/steno_app/assets/i18n/en.yaml`, `src/steno_app/assets/i18n/ru.yaml`
 
 ## 4. Функциональная спецификация
 
@@ -77,7 +77,7 @@
 - Схема именования файлов:
   - `Meet_DD.MM.YYYY_HH:MM:SS.mp4`
   - `Meet_DD.MM.YYYY_HH:MM:SS_mic.m4a`
-- Используется `ScreenRecorder` (`recorder.py`) с dual writer-пайплайном.
+- Используется `ScreenRecorder` (`src/steno_app/recorder.py`) с dual writer-пайплайном.
 - Есть watchdog таймаута старта (15с) с уведомлением пользователю.
 - `Stop` завершает запись и обновляет UI/меню.
 
@@ -151,7 +151,7 @@
 - Ошибки выводятся через alerts/notifications и пишутся в лог (`~/Library/Logs/Steno/app.log`).
 
 ## 7. Сборка и упаковка
-- Точка входа: `app.py`
+- Точка входа: `src/steno_app/app.py`
 - Конфигурация py2app: `setup.py`
 - В data files включены иконки и i18n YAML.
 - В сборку входят Python-пакеты: `steno`, `steno.ui`, `steno.services`.

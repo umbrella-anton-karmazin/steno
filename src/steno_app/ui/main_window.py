@@ -1,9 +1,9 @@
 import objc
 from Foundation import NSObject
 
-from steno.ui.main_window_actions import MainWindowActionsMixin
-from steno.ui.main_window_state import MainWindowStateMixin
-from steno.ui.main_window_view import MainWindowViewMixin
+from steno_app.ui.main_window_actions import MainWindowActionsMixin
+from steno_app.ui.main_window_state import MainWindowStateMixin
+from steno_app.ui.main_window_view import MainWindowViewMixin
 
 
 class MainWindowController(
@@ -21,6 +21,10 @@ class MainWindowController(
             self.prompt_drafts = {}
             self.prompt_loaded_for = None
             self.video_duration_cache = {}
+            self.inline_rename_row = None
+            self.inline_rename_filename = None
+            self.inline_rename_field = None
+            self.inline_rename_in_commit = False
             self.build_window()
         return self
 
@@ -40,11 +44,23 @@ class MainWindowController(
     def tableView_objectValueForTableColumn_row_(self, table, column, row):
         return MainWindowStateMixin.tableView_objectValueForTableColumn_row_(self, table, column, row)
 
+    def tableView_viewForTableColumn_row_(self, table, column, row):
+        return MainWindowStateMixin.tableView_viewForTableColumn_row_(self, table, column, row)
+
     def tableView_shouldEditTableColumn_row_(self, table, column, row):
         return MainWindowStateMixin.tableView_shouldEditTableColumn_row_(self, table, column, row)
 
+    def tableView_setObjectValue_forTableColumn_row_(self, table, value, column, row):
+        return MainWindowStateMixin.tableView_setObjectValue_forTableColumn_row_(self, table, value, column, row)
+
     def tableViewSelectionDidChange_(self, notification):
         return MainWindowStateMixin.tableViewSelectionDidChange_(self, notification)
+
+    def tableView_rowViewForRow_(self, table, row):
+        return MainWindowStateMixin.tableView_rowViewForRow_(self, table, row)
+
+    def controlTextDidEndEditing_(self, notification):
+        return MainWindowStateMixin.controlTextDidEndEditing_(self, notification)
 
     def onStartStop_(self, obj):
         return MainWindowActionsMixin.onStartStop_(self, obj)
@@ -87,3 +103,6 @@ class MainWindowController(
 
     def onOpenLink_(self, obj):
         return MainWindowActionsMixin.onOpenLink_(self, obj)
+
+    def onRecordingsDoubleClick_(self, obj):
+        return MainWindowActionsMixin.onRecordingsDoubleClick_(self, obj)

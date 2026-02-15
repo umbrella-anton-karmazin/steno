@@ -21,8 +21,8 @@ def _resolve_assets_dir():
         if os.path.isdir(candidate):
             return candidate
 
-    # Source mode: steno/config.py -> project root/assets
-    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Source mode: src/steno_app/config.py -> src/steno_app/assets
+    base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, "assets")
 
 
