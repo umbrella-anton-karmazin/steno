@@ -549,6 +549,8 @@ class MainWindowViewMixin:
         self.prompt_text.setFont_(NSFont.systemFontOfSize_(12.0))
         self.prompt_text.setDrawsBackground_(True)
         self.prompt_text.setBackgroundColor_(NSColor.textBackgroundColor())
+        self.prompt_text.setTextColor_(NSColor.textColor())
+        self.prompt_text.setInsertionPointColor_(NSColor.textColor())
         self.prompt_scroll.setDocumentView_(self.prompt_text)
         self.content_view.addSubview_(self.prompt_scroll)
 
@@ -590,6 +592,8 @@ class MainWindowViewMixin:
         self.user_prompt_text.setFont_(NSFont.systemFontOfSize_(12.0))
         self.user_prompt_text.setDrawsBackground_(True)
         self.user_prompt_text.setBackgroundColor_(NSColor.textBackgroundColor())
+        self.user_prompt_text.setTextColor_(NSColor.textColor())
+        self.user_prompt_text.setInsertionPointColor_(NSColor.textColor())
         self.user_prompt_scroll.setDocumentView_(self.user_prompt_text)
         self.content_view.addSubview_(self.user_prompt_scroll)
 
@@ -619,6 +623,8 @@ class MainWindowViewMixin:
             self.protocol_text.setRichText_(True)
             self.protocol_text.setFont_(NSFont.systemFontOfSize_(13.0))
             self.protocol_text.setDrawsBackground_(True)
+            self.protocol_text.setTextColor_(NSColor.labelColor())
+            self.protocol_text.setBackgroundColor_(NSColor.textBackgroundColor())
             self.protocol_scroll.setDocumentView_(self.protocol_text)
             self.content_view.addSubview_(self.protocol_scroll)
 

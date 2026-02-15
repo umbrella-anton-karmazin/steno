@@ -122,13 +122,24 @@ class MainWindowStateMixin:
   <meta charset="utf-8" />
   <style>
     :root {{ color-scheme: light dark; }}
+    :root {{
+      --fg-light: #1f2328;
+      --fg-dark: #e7ebf2;
+      --border-light: rgba(80, 88, 102, 0.28);
+      --border-dark: rgba(171, 185, 207, 0.34);
+      --th-light: rgba(127,127,127,0.12);
+      --th-dark: rgba(157, 171, 196, 0.18);
+    }}
     html, body {{
       margin: 0; padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 16px;
       line-height: 1.45;
       background: transparent;
-      color: inherit;
+      color: var(--fg-light);
+    }}
+    @media (prefers-color-scheme: dark) {{
+      html, body {{ color: var(--fg-dark); }}
     }}
     .wrap {{ padding: 4px 4px 8px 4px; }}
     h1 {{ font-size: 1.40em; margin: 0.7em 0 0.25em; }}
@@ -145,12 +156,16 @@ class MainWindowStateMixin:
       font-size: 0.95em;
     }}
     th, td {{
-      border: 1px solid rgba(127,127,127,0.32);
+      border: 1px solid var(--border-light);
       padding: 6px 8px;
       text-align: left;
       vertical-align: top;
     }}
-    th {{ background: rgba(127,127,127,0.12); font-weight: 600; }}
+    th {{ background: var(--th-light); font-weight: 600; }}
+    @media (prefers-color-scheme: dark) {{
+      th, td {{ border-color: var(--border-dark); }}
+      th {{ background: var(--th-dark); }}
+    }}
   </style>
 </head>
 <body><div class="wrap">{body}</div></body>
@@ -163,13 +178,20 @@ class MainWindowStateMixin:
 <html><head><meta charset="utf-8" />
 <style>
   :root {{ color-scheme: light dark; }}
+  :root {{
+    --fg-light: #1f2328;
+    --fg-dark: #e7ebf2;
+  }}
   html, body {{
     margin: 0; padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 12px;
     line-height: 1.45;
     background: transparent;
-    color: inherit;
+    color: var(--fg-light);
+  }}
+  @media (prefers-color-scheme: dark) {{
+    html, body {{ color: var(--fg-dark); }}
   }}
   .wrap {{ white-space: pre-wrap; padding: 4px; }}
 </style>
