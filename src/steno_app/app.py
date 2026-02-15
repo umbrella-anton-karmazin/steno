@@ -105,6 +105,9 @@ class RecorderApp(rumps.App):
         self.is_recording = False
         self.recording_blink_on = True
         self.is_processing = False
+        self.is_importing = False
+        self.import_progress = 0.0
+        self.current_import_file = None
         self.is_waiting_permissions = False
         self.start_attempt_id = 0
         self.current_processing_file = None
@@ -312,6 +315,8 @@ class RecorderApp(rumps.App):
         can_use_recent = not (self.is_processing or self.is_waiting_permissions)
 
         idle_mode = not self.is_recording and not self.is_processing and not self.is_waiting_permissions
+        if self.is_importing:
+            idle_mode = False
 
         # Blink marker for actively recording item in the list.
         if self.is_recording:

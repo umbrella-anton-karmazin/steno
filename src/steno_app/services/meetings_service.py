@@ -1,5 +1,7 @@
 import os
 import re
+import shutil
+import threading
 
 import rumps
 
@@ -15,15 +17,42 @@ except Exception:
 
 
 class MeetingsService:
+    SUPPORTED_MEETING_EXTENSIONS = {
+        ".mp4",
+        ".mov",
+        ".m4v",
+        ".mkv",
+        ".webm",
+        ".avi",
+        ".m4a",
+        ".mp3",
+        ".wav",
+        ".aac",
+        ".flac",
+        ".ogg",
+    }
+
     def __init__(self, app, has_pyobjc):
         self.app = app
         self.has_pyobjc = bool(has_pyobjc)
+
+    def _is_primary_meeting_media(self, filename):
+        if not filename or filename.startswith("."):
+            return False
+        name = str(filename)
+        lower = name.lower()
+        if lower.endswith("_protocol.txt") or lower.endswith("_protocol.meta.json"):
+            return False
+        if lower.endswith("_mic.m4a"):
+            return False
+        ext = os.path.splitext(lower)[1]
+        return ext in self.SUPPORTED_MEETING_EXTENSIONS
 
     def list_recent_recordings(self, limit=10):
         save_dir = self.app.config["save_dir"]
         if not os.path.exists(save_dir):
             return []
-        all_files = [f for f in os.listdir(save_dir) if f.lower().endswith(".mp4")]
+        all_files = [f for f in os.listdir(save_dir) if self._is_primary_meeting_media(f)]
         all_files.sort(key=lambda x: os.path.getmtime(os.path.join(save_dir, x)), reverse=True)
 
         hidden = self._get_hidden_recordings()
@@ -68,6 +97,19 @@ class MeetingsService:
         self.app.config["hidden_recordings"] = sorted(hidden_set)
         ConfigManager.save(self.app.config)
 
+    def _get_imported_recordings(self):
+        raw = self.app.config.get("imported_recordings", [])
+        if isinstance(raw, list):
+            return set(str(x) for x in raw if isinstance(x, str) and x)
+        return set()
+
+    def _set_imported_recordings(self, imported_set):
+        self.app.config["imported_recordings"] = sorted(imported_set)
+        ConfigManager.save(self.app.config)
+
+    def is_imported_recording(self, filename):
+        return bool(filename and filename in self._get_imported_recordings())
+
     def _hide_recording_entry(self, filename):
         if not filename:
             return
@@ -98,11 +140,113 @@ class MeetingsService:
 
     def _sanitize_recording_base_name(self, raw_name):
         name = (raw_name or "").strip()
-        if name.lower().endswith(".mp4"):
-            name = name[:-4].strip()
+        root, ext = os.path.splitext(name)
+        if ext:
+            name = root.strip()
         name = name.replace("/", " ").replace(":", "-")
         name = re.sub(r"\s+", " ", name).strip().strip(".")
         return name
+
+    def _build_unique_filename(self, base_name, extension):
+        ext = str(extension or "").lower()
+        if not ext.startswith("."):
+            ext = "." + ext
+        candidate = f"{base_name}{ext}"
+        save_dir = self.app.config["save_dir"]
+        if not os.path.exists(os.path.join(save_dir, candidate)):
+            return candidate
+        idx = 2
+        while True:
+            candidate = f"{base_name}_{idx}{ext}"
+            if not os.path.exists(os.path.join(save_dir, candidate)):
+                return candidate
+            idx += 1
+
+    def import_external_meeting_file(self, source_path):
+        """Synchronous import helper kept for internal/background use."""
+        src = str(source_path or "").strip()
+        if not src or not os.path.isfile(src):
+            raise FileNotFoundError(tr("import.error.not_found"))
+
+        ext = os.path.splitext(src)[1].lower()
+        if ext not in self.SUPPORTED_MEETING_EXTENSIONS:
+            raise ValueError(tr("import.error.unsupported", ext=ext or "?"))
+
+        base = self._sanitize_recording_base_name(os.path.splitext(os.path.basename(src))[0])
+        if not base:
+            base = "Imported_Meeting"
+        target_name = self._build_unique_filename(base, ext)
+        target_path = os.path.join(self.app.config["save_dir"], target_name)
+
+        # Fast path: already in save_dir with the same basename.
+        if os.path.abspath(src) != os.path.abspath(target_path):
+            total = max(1, os.path.getsize(src))
+            copied = 0
+            last_progress = -1.0
+            with open(src, "rb") as in_f, open(target_path, "wb") as out_f:
+                while True:
+                    chunk = in_f.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    out_f.write(chunk)
+                    copied += len(chunk)
+                    progress = min(1.0, float(copied) / float(total))
+                    if progress - last_progress >= 0.01:
+                        last_progress = progress
+                        self.app.import_progress = progress
+                        self.app.request_ui_refresh()
+            try:
+                shutil.copystat(src, target_path, follow_symlinks=True)
+            except Exception:
+                pass
+        # Keep imported entries at top of library (sorting is by mtime desc).
+        try:
+            os.utime(target_path, None)
+        except Exception:
+            pass
+        self._unhide_recording_entry(target_name)
+        imported = self._get_imported_recordings()
+        imported.add(target_name)
+        self._set_imported_recordings(imported)
+        return target_name
+
+    def import_external_meeting_file_async(self, source_path, on_done=None):
+        src = str(source_path or "").strip()
+        if self.app.is_importing:
+            rumps.alert(tr("import.error.title"), tr("import.error.busy"))
+            return False
+
+        def worker():
+            imported_name = None
+            error_text = None
+            try:
+                imported_name = self.import_external_meeting_file(src)
+            except Exception as e:
+                error_text = str(e) or tr("import.error.copy_failed", error=e)
+            finally:
+                def finish_ui():
+                    self.app.is_importing = False
+                    self.app.import_progress = 0.0
+                    self.app.current_import_file = None
+                    if imported_name:
+                        rumps.notification(tr("import.success.title"), tr("import.success.body"), imported_name)
+                    elif error_text:
+                        rumps.alert(tr("import.error.title"), error_text)
+                    self.app.request_ui_refresh()
+                    if on_done is not None:
+                        try:
+                            on_done(imported_name)
+                        except Exception:
+                            pass
+
+                self.app.run_on_main(finish_ui)
+
+        self.app.is_importing = True
+        self.app.import_progress = 0.0
+        self.app.current_import_file = os.path.basename(src) if src else None
+        self.app.request_ui_refresh()
+        threading.Thread(target=worker, daemon=True).start()
+        return True
 
     def rename_recording_interactive(self, filename):
         if not filename:
@@ -131,7 +275,8 @@ class MeetingsService:
         if new_base == current_base:
             return filename
 
-        new_filename = f"{new_base}.mp4"
+        old_ext = os.path.splitext(filename)[1] or ".mp4"
+        new_filename = f"{new_base}{old_ext}"
         old_paths = self._paths_for_recording(filename)
         new_paths = self._paths_for_recording(new_filename)
 
@@ -176,6 +321,12 @@ class MeetingsService:
             hidden.remove(filename)
             hidden.add(new_filename)
             self._set_hidden_recordings(hidden)
+
+        imported = self._get_imported_recordings()
+        if filename in imported:
+            imported.remove(filename)
+            imported.add(new_filename)
+            self._set_imported_recordings(imported)
 
         rumps.notification(tr("rename.done_title"), tr("rename.done_body"), new_filename)
         self.app.request_ui_refresh()
@@ -252,6 +403,10 @@ class MeetingsService:
             rumps.alert(tr("delete.error_title"), "\n".join(failed))
 
         self._unhide_recording_entry(filename)
+        imported = self._get_imported_recordings()
+        if filename in imported:
+            imported.remove(filename)
+            self._set_imported_recordings(imported)
         self.app.request_ui_refresh()
         return not failed
 

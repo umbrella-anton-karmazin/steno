@@ -640,9 +640,7 @@ class MainWindowStateMixin:
     def _display_meeting_name(self, filename):
         if not filename:
             return ""
-        if filename.lower().endswith(".mp4"):
-            return os.path.splitext(filename)[0]
-        return filename
+        return os.path.splitext(filename)[0]
 
     @objc.python_method
     def _display_title_for_recording(self, filename):
@@ -671,6 +669,14 @@ class MainWindowStateMixin:
             (not self.app.is_processing or self.app.is_recording)
             and not self.app.is_waiting_permissions
         )
+
+        if getattr(self.app, "is_importing", False):
+            progress = int(max(0, min(100, round(float(getattr(self.app, "import_progress", 0.0)) * 100))))
+            self.import_button.setTitle_(tr("main.importing_progress", percent=progress))
+            self.import_button.setEnabled_(False)
+        else:
+            self.import_button.setTitle_(tr("main.import_meeting"))
+            self.import_button.setEnabled_(True)
 
     @objc.python_method
     def refresh_file_lists(self):
@@ -747,6 +753,8 @@ class MainWindowStateMixin:
         self.detail_title_label.setStringValue_(display_name)
         audio_label = mic_name if os.path.exists(mic_path) else tr("main.audio_missing")
         files_text = tr("main.files_line", video=video_name, audio=audio_label)
+        if self.app.meetings_service.is_imported_recording(video_name):
+            files_text += "\n" + tr("main.source_imported")
         if status == "recording" and self._is_recording_file(video_name):
             duration_seconds = self.app.get_live_recording_elapsed_seconds()
         else:

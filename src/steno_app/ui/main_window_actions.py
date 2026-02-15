@@ -3,7 +3,7 @@ import re
 import time
 
 import rumps
-from AppKit import NSApp, NSMenu, NSMenuItem, NSPasteboard, NSPasteboardTypeString
+from AppKit import NSApp, NSMenu, NSMenuItem, NSOpenPanel, NSPasteboard, NSPasteboardTypeString
 from Foundation import NSIndexSet
 
 from steno_app.config import (
@@ -61,6 +61,47 @@ class MainWindowActionsMixin:
         self.refresh_from_state()
         self.refresh_file_lists()
         self.refresh_detail_view()
+
+    def onImportMeeting_(self, _):
+        if getattr(self.app, "is_importing", False):
+            rumps.alert(tr("import.error.title"), tr("import.error.busy"))
+            return
+        panel = NSOpenPanel.openPanel()
+        panel.setCanChooseFiles_(True)
+        panel.setCanChooseDirectories_(False)
+        panel.setAllowsMultipleSelection_(False)
+        panel.setAllowedFileTypes_(
+            [
+                "mp4",
+                "mov",
+                "m4v",
+                "mkv",
+                "webm",
+                "avi",
+                "m4a",
+                "mp3",
+                "wav",
+                "aac",
+                "flac",
+                "ogg",
+            ]
+        )
+        response = panel.runModal()
+        if int(response) != 1:
+            return
+
+        try:
+            src_path = str(panel.URL().path() or "")
+        except Exception:
+            src_path = ""
+        if not src_path:
+            return
+
+        def on_done(imported_name):
+            if imported_name:
+                self.focus_recording(imported_name)
+
+        self.app.meetings_service.import_external_meeting_file_async(src_path, on_done=on_done)
 
     def onProcessSelected_(self, _):
         if not self.selected_recording:

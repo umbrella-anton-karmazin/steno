@@ -391,7 +391,16 @@ class MainWindowViewMixin:
         self.start_stop_button.setAutoresizingMask_(NSViewMaxXMargin | NSViewMinYMargin)
         self.sidebar_view.addSubview_(self.start_stop_button)
 
-        list_top = self.sidebar_view.bounds()[1][1] - 72.0
+        self.import_button = self._sidebar_button(
+            ((self.sidebar_pad_x, self.sidebar_view.bounds()[1][1] - 84.0), (self.sidebar_inner_width, 28.0)),
+            tr("main.import_meeting"),
+            "onImportMeeting:",
+            mode="secondary",
+        )
+        self.import_button.setAutoresizingMask_(NSViewMaxXMargin | NSViewMinYMargin)
+        self.sidebar_view.addSubview_(self.import_button)
+
+        list_top = self.sidebar_view.bounds()[1][1] - 112.0
         list_bottom = 88.0
         self.recordings_scroll = NSScrollView.alloc().initWithFrame_(
             ((self.sidebar_pad_x, list_bottom), (self.sidebar_inner_width, max(100.0, list_top - list_bottom)))

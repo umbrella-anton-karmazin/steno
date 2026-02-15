@@ -3,6 +3,9 @@ import os
 import re
 import time
 import json
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime
 
 import rumps
@@ -19,6 +22,90 @@ logger = logging.getLogger("Steno")
 def _is_invalid_api_key_error(error_text):
     text = (error_text or "").lower()
     return ("api_key_invalid" in text) or ("api key not valid" in text)
+
+
+def _ffmpeg_available():
+    return shutil.which("ffmpeg") is not None
+
+
+def _is_audio_ext(ext):
+    return ext in {".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg"}
+
+
+def _is_video_ext(ext):
+    return ext in {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
+
+
+def _normalize_media_for_upload(path):
+    """
+    Try to normalize media for better upload compatibility.
+    Returns (normalized_path, temp_created: bool).
+    """
+    src = str(path or "")
+    if not src or not os.path.exists(src):
+        return src, False
+
+    ext = os.path.splitext(src)[1].lower()
+    if ext in {".mp4", ".m4a"}:
+        return src, False
+    if not _ffmpeg_available():
+        return src, False
+
+    is_video = _is_video_ext(ext)
+    is_audio = _is_audio_ext(ext)
+    if not is_video and not is_audio:
+        return src, False
+
+    suffix = ".mp4" if is_video else ".m4a"
+    fd, normalized_path = tempfile.mkstemp(prefix="steno_norm_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        if is_video:
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                src,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "160k",
+                normalized_path,
+            ]
+        else:
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                src,
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                normalized_path,
+            ]
+
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if proc.returncode != 0 or not os.path.exists(normalized_path) or os.path.getsize(normalized_path) == 0:
+            try:
+                os.remove(normalized_path)
+            except Exception:
+                pass
+            return src, False
+        return normalized_path, True
+    except Exception:
+        try:
+            os.remove(normalized_path)
+        except Exception:
+            pass
+        return src, False
 
 
 def get_meeting_date(filename):
@@ -145,6 +232,7 @@ def process_video_with_ai(
     user_prompt_override=None,
     template_id_override=None,
 ):
+    temp_files_to_cleanup = []
     try:
         app_instance.is_processing = True
         app_instance.request_set_state_icon("processing")
@@ -206,8 +294,34 @@ def process_video_with_ai(
                 uf = client.files.upload(file=path)
                 uploaded_files.append(uf)
         except Exception as upload_err:
-            logger.exception("File upload failed")
-            raise Exception(f"Ошибка загрузки: {upload_err}")
+            logger.exception("File upload failed, trying compatibility normalization")
+
+            normalized_paths = []
+            for path in files_to_upload_paths:
+                normalized, created = _normalize_media_for_upload(path)
+                normalized_paths.append(normalized)
+                if created:
+                    temp_files_to_cleanup.append(normalized)
+
+            if normalized_paths != files_to_upload_paths:
+                logger.info("Retrying upload with normalized media files")
+                uploaded_files = []
+                retry_error = None
+                try:
+                    for path in normalized_paths:
+                        logger.info(f"Uploading normalized {os.path.basename(path)}...")
+                        uf = client.files.upload(file=path)
+                        uploaded_files.append(uf)
+                except Exception as second_err:
+                    retry_error = second_err
+                    logger.exception("Upload with normalization failed")
+
+                if retry_error is None:
+                    files_to_upload_paths = normalized_paths
+                else:
+                    raise Exception(f"Ошибка загрузки: {retry_error}")
+            else:
+                raise Exception(f"Ошибка загрузки: {upload_err}")
 
         # 4. Ожидание процессинга ВСЕХ файлов
         ready_files = []
@@ -328,3 +442,10 @@ def process_video_with_ai(
             app_instance.request_set_state_icon("recording")
         else:
             app_instance.request_set_state_icon("idle")
+    finally:
+        for path in temp_files_to_cleanup:
+            try:
+                if path and os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass

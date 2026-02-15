@@ -67,6 +67,9 @@ class MainWindowController(
     def onStartStop_(self, obj):
         return MainWindowActionsMixin.onStartStop_(self, obj)
 
+    def onImportMeeting_(self, obj):
+        return MainWindowActionsMixin.onImportMeeting_(self, obj)
+
     def onProcessSelected_(self, obj):
         return MainWindowActionsMixin.onProcessSelected_(self, obj)
 

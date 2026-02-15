@@ -184,6 +184,7 @@ DEFAULT_CONFIG = {
     "last_request_tokens": 0,
     "permissions_onboarding_done": False,
     "hidden_recordings": [],
+    "imported_recordings": [],
     "prompt_templates": _make_default_prompt_templates(DEFAULT_SYSTEM_PROMPT),
 }
 
