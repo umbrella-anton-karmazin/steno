@@ -156,8 +156,8 @@ class PermissionWindowController(NSObject):
             if self._screen_granted_sticky:
                 screen_granted = True
             else:
-                screen_granted = self.app.permission_manager.is_screen_authorized()
-            mic_granted = self.app.permission_manager.is_mic_authorized()
+                screen_granted = self.app.permission_manager.safe_is_screen_authorized(timeout_sec=1.5, default=False)
+            mic_granted = self.app.permission_manager.safe_is_mic_authorized(timeout_sec=1.5, default=False)
             self.app.run_on_main(self._apply_permission_statuses, screen_granted, mic_granted)
 
         threading.Thread(target=check_permissions_worker, daemon=True).start()

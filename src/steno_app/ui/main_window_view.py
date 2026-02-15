@@ -13,6 +13,7 @@ from AppKit import (
     NSMenu,
     NSMenuItem,
     NSProgressIndicator,
+    NSPopUpButton,
     NSScrollView,
     NSTableColumn,
     NSTableCellView,
@@ -470,6 +471,23 @@ class MainWindowViewMixin:
         self.files_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
         self.content_view.addSubview_(self.files_label)
 
+        self.prompt_template_label = self._label(
+            ((24.0, self.content_view.bounds()[1][1] - 152.0), (260.0, 20.0)),
+            tr("main.prompt_template"),
+            bold=True,
+        )
+        self.prompt_template_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
+        self.content_view.addSubview_(self.prompt_template_label)
+
+        self.prompt_template_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
+            ((24.0, self.content_view.bounds()[1][1] - 184.0), (380.0, 28.0)),
+            False,
+        )
+        self.prompt_template_popup.setTarget_(self)
+        self.prompt_template_popup.setAction_("onPromptTemplateChanged:")
+        self.prompt_template_popup.setAutoresizingMask_(NSViewMaxXMargin | NSViewMinYMargin)
+        self.content_view.addSubview_(self.prompt_template_popup)
+
         self.process_button = self._sidebar_button(
             ((24.0, self.content_view.bounds()[1][1] - 160.0), (120.0, 30.0)),
             tr("main.process"),
@@ -533,7 +551,48 @@ class MainWindowViewMixin:
         self.prompt_hint_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
         self.content_view.addSubview_(self.prompt_hint_label)
 
-        protocol_frame = ((24.0, 24.0), (self.content_view.bounds()[1][0] - 48.0, self.content_view.bounds()[1][1] - 396.0))
+        self.user_prompt_label = self._label(
+            ((24.0, self.content_view.bounds()[1][1] - 388.0), (260.0, 24.0)),
+            tr("main.user_prompt_editable"),
+            bold=True,
+        )
+        self.user_prompt_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
+        self.content_view.addSubview_(self.user_prompt_label)
+
+        self.user_prompt_scroll = NSScrollView.alloc().initWithFrame_(
+            ((24.0, self.content_view.bounds()[1][1] - 496.0), (self.content_view.bounds()[1][0] - 48.0, 92.0))
+        )
+        self.user_prompt_scroll.setHasVerticalScroller_(True)
+        self.user_prompt_scroll.setHasHorizontalScroller_(False)
+        self.user_prompt_scroll.setBorderType_(2)
+        self.user_prompt_scroll.setDrawsBackground_(True)
+        self.user_prompt_scroll.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
+        try:
+            self.user_prompt_scroll.setWantsLayer_(True)
+            self.user_prompt_scroll.layer().setCornerRadius_(6.0)
+            self.user_prompt_scroll.layer().setBorderWidth_(1.0)
+            self.user_prompt_scroll.layer().setBorderColor_(NSColor.quaternaryLabelColor().CGColor())
+        except Exception:
+            pass
+        self.user_prompt_text = PromptTextView.alloc().initWithFrame_(self.user_prompt_scroll.bounds())
+        self.user_prompt_text.setEditable_(True)
+        self.user_prompt_text.setSelectable_(True)
+        self.user_prompt_text.setRichText_(False)
+        self.user_prompt_text.setFont_(NSFont.systemFontOfSize_(12.0))
+        self.user_prompt_text.setDrawsBackground_(True)
+        self.user_prompt_text.setBackgroundColor_(NSColor.textBackgroundColor())
+        self.user_prompt_scroll.setDocumentView_(self.user_prompt_text)
+        self.content_view.addSubview_(self.user_prompt_scroll)
+
+        self.user_prompt_hint_label = self._label(
+            ((24.0, self.content_view.bounds()[1][1] - 520.0), (700.0, 18.0)),
+            tr("main.user_prompt_hint"),
+            secondary=True,
+        )
+        self.user_prompt_hint_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
+        self.content_view.addSubview_(self.user_prompt_hint_label)
+
+        protocol_frame = ((24.0, 24.0), (self.content_view.bounds()[1][0] - 48.0, self.content_view.bounds()[1][1] - 560.0))
         if HAS_WEBKIT:
             self.protocol_web_view = WKWebView.alloc().initWithFrame_(protocol_frame)
             self.protocol_web_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)

@@ -55,6 +55,7 @@ class MeetingsService:
             "video": os.path.join(save_dir, filename),
             "mic": os.path.join(save_dir, base + "_mic.m4a"),
             "protocol": os.path.join(save_dir, base + "_protocol.txt"),
+            "protocol_meta": os.path.join(save_dir, base + "_protocol.meta.json"),
         }
 
     def _get_hidden_recordings(self):
@@ -143,6 +144,8 @@ class MeetingsService:
             rename_ops.append((old_paths["mic"], new_paths["mic"]))
         if os.path.exists(old_paths["protocol"]):
             rename_ops.append((old_paths["protocol"], new_paths["protocol"]))
+        if os.path.exists(old_paths["protocol_meta"]):
+            rename_ops.append((old_paths["protocol_meta"], new_paths["protocol_meta"]))
 
         for src, dst in rename_ops:
             if os.path.abspath(src) == os.path.abspath(dst):
@@ -230,7 +233,7 @@ class MeetingsService:
             return False
 
         paths = self._paths_for_recording(filename)
-        to_delete = [paths["video"], paths["mic"], paths["protocol"]]
+        to_delete = [paths["video"], paths["mic"], paths["protocol"], paths["protocol_meta"]]
 
         removed = []
         failed = []

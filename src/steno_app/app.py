@@ -138,18 +138,35 @@ class RecorderApp(rumps.App):
                 AppHelper.callAfter(self._start_initial_ui_flow)
             except Exception:
                 logger.exception("Failed to schedule initial UI flow")
+            # Startup watchdog: if first dispatch is missed, retry once.
+            watchdog = threading.Timer(1.5, self._startup_ui_watchdog)
+            watchdog.daemon = True
+            watchdog.start()
 
         logger.info("Steno initialized (Dual-Stream Mode)")
 
+    def _startup_ui_watchdog(self):
+        if not HAS_PYOBJC:
+            return
+        if self.window_controller or self.permission_controller:
+            return
+        logger.warning("Startup watchdog: no window controller yet, retrying initial UI flow")
+        try:
+            self._start_initial_ui_flow()
+        except Exception:
+            logger.exception("Startup watchdog failed")
+
     def _start_initial_ui_flow(self):
         def worker():
+            logger.info("Initial UI flow: starting permission preflight")
             try:
-                screen_ok = self.permission_manager.is_screen_authorized()
-                mic_ok = self.permission_manager.is_mic_authorized()
+                screen_ok = self.permission_manager.safe_is_screen_authorized(timeout_sec=1.5, default=False)
+                mic_ok = self.permission_manager.safe_is_mic_authorized(timeout_sec=1.5, default=False)
             except Exception:
                 logger.exception("Failed to preflight permissions")
                 screen_ok = False
                 mic_ok = False
+            logger.info("Initial UI flow: preflight result screen=%s mic=%s", screen_ok, mic_ok)
 
             def apply_state():
                 if screen_ok and mic_ok:
@@ -170,14 +187,20 @@ class RecorderApp(rumps.App):
         threading.Thread(target=worker, daemon=True).start()
 
     def ensure_main_window(self):
-        if not self.window_controller:
-            self.window_controller = MainWindowController.alloc().initWithApp_(self)
-        self.window_controller.show_window()
+        try:
+            if not self.window_controller:
+                self.window_controller = MainWindowController.alloc().initWithApp_(self)
+            self.window_controller.show_window()
+        except Exception:
+            logger.exception("Failed to open main window")
 
     def show_permissions_window(self):
-        if not self.permission_controller:
-            self.permission_controller = PermissionWindowController.alloc().initWithApp_(self)
-        self.permission_controller.show_window()
+        try:
+            if not self.permission_controller:
+                self.permission_controller = PermissionWindowController.alloc().initWithApp_(self)
+            self.permission_controller.show_window()
+        except Exception:
+            logger.exception("Failed to open permissions window")
 
     def request_complete_permissions_onboarding(self):
         self.run_on_main(self.complete_permissions_onboarding)
@@ -222,6 +245,10 @@ class RecorderApp(rumps.App):
     @rumps.timer(1)
     def hide_status_bar_item(self, _):
         if self.status_item_hidden:
+            return
+        # Keep status item visible until at least one app window is created.
+        # This gives user a recovery path ("Open UI") if initial window flow stalls.
+        if not self.window_controller and not self.permission_controller:
             return
         try:
             if hasattr(self, "_nsapp") and hasattr(self._nsapp, "nsstatusitem"):
@@ -360,7 +387,6 @@ class RecorderApp(rumps.App):
 
         self.settings_menu.add(self.quality_menu)
         self.settings_menu.add(self.model_menu)
-        self.settings_menu.add(rumps.MenuItem(tr("menu.edit_system_prompt"), callback=self.edit_prompt))
         self.settings_menu.add(rumps.MenuItem(tr("menu.set_api_key"), callback=self.set_api_key))
         self.settings_menu.add(rumps.MenuItem(tr("menu.set_base_url"), callback=self.set_base_url))
         
@@ -392,7 +418,7 @@ class RecorderApp(rumps.App):
         if self.window_controller:
             self.window_controller.show_window()
 
-    def run_on_main(self, fn, *args):
+    def run_on_main(self, fn, *args, _retries=3):
         if HAS_PYOBJC:
             if NSThread.isMainThread():
                 fn(*args)
@@ -401,7 +427,20 @@ class RecorderApp(rumps.App):
                 AppHelper.callAfter(fn, *args)
                 return
             except Exception as e:
-                logger.warning(f"callAfter failed, skipping direct background UI call: {e}")
+                if _retries > 0:
+                    logger.warning(
+                        "callAfter failed, retrying main-thread dispatch (%s retries left): %s",
+                        _retries,
+                        e,
+                    )
+                    timer = threading.Timer(
+                        0.15,
+                        lambda: self.run_on_main(fn, *args, _retries=_retries - 1),
+                    )
+                    timer.daemon = True
+                    timer.start()
+                    return
+                logger.error("callAfter failed after retries; UI action dropped: %s", e)
                 return
         fn(*args)
 
@@ -568,6 +607,7 @@ class RecorderApp(rumps.App):
         filename,
         system_prompt_override=None,
         user_prompt_override=None,
+        template_id_override=None,
         prompt_override=None,
     ):
         if self.is_processing:
@@ -594,6 +634,7 @@ class RecorderApp(rumps.App):
                     self,
                     system_prompt_override,
                     user_prompt_override,
+                    template_id_override,
                 ),
                 daemon=True
             ).start()

@@ -41,6 +41,32 @@ AI_MODELS = [
 ]
 
 DEFAULT_SYSTEM_PROMPT = (
+    "Ты — ИИ-ассистент для подготовки протоколов встреч.\n"
+    "Верни только результат в Markdown, без вступлений и пояснений.\n"
+    "Не выдумывай факты; если данных нет, укажи '-'.\n\n"
+    "Структура ответа (соблюдать строго):\n"
+    "# Протокол встречи: [Краткая тема]\n"
+    "**Дата:** [Дата]\n"
+    "**Участники:** [Имена/роли или '-']\n\n"
+    "## 1. Саммари (Summary)\n"
+    "[Коротко и по сути]\n\n"
+    "## 2. Принятые решения\n"
+    "* [Конкретные решения]\n\n"
+    "## 3. План действий (Action Items)\n"
+    "Оформи таблицей:\n"
+    "| Задача | Ответственный | Срок |\n"
+    "| :--- | :--- | :--- |\n"
+    "| [Описание] | [Кто] | [Дата или -] |"
+)
+
+
+DEFAULT_USER_PROMPT = (
+    "Составь протокол встречи по приложенным файлам.\n"
+    "Дата встречи: {meeting_date}.\n"
+    "Укажи участников только если уверенно распознал их по речи."
+)
+
+LEGACY_DEFAULT_SYSTEM_PROMPT = (
     "Ты — ИИ-ассистент для составления протоколов встреч. Твоя задача — "
     "проанализировать предоставленный медиафайл и вернуть ТОЛЬКО протокол в формате "
     "Markdown (оптимизированный для Confluence), строго без вступительных слов, "
@@ -60,8 +86,28 @@ DEFAULT_SYSTEM_PROMPT = (
     "| [Описание задачи] | [Имя] | [Дедлайн или -] |"
 )
 
+LEGACY_DEFAULT_USER_PROMPT = "Составь протокол по прикрепленному файлу.\n\nДата встречи: {meeting_date}"
 
-DEFAULT_USER_PROMPT = "Составь протокол по прикрепленному файлу.\n\nДата встречи: {meeting_date}"
+LEGACY_TRANSCRIPT_SYSTEM_PROMPT = (
+    "Ты — ИИ-ассистент. Проанализируй медиафайл и верни только чистый "
+    "транскрипт встречи в Markdown.\n"
+    "Структурируй по времени и спикерам.\n"
+    "Если спикер не определен, помечай как 'Спикер N'."
+)
+LEGACY_TRANSCRIPT_USER_PROMPT = (
+    "Сделай транскрипт встречи с идентификацией спикеров.\n\n"
+    "Дата встречи: {meeting_date}"
+)
+LEGACY_ANALYSIS_SYSTEM_PROMPT = (
+    "Ты — ИИ-ассистент. Проанализируй встречу и верни Markdown-отчет:\n"
+    "1) цель и контекст встречи,\n"
+    "2) договоренности,\n"
+    "3) разногласия/нерешенные вопросы,\n"
+    "4) эмоциональный фон участников,\n"
+    "5) рекомендации по следующим шагам.\n"
+    "Без вводных фраз и без лишних пояснений."
+)
+LEGACY_ANALYSIS_USER_PROMPT = "Сделай аналитический отчет по встрече.\n\nДата встречи: {meeting_date}"
 
 
 def _make_default_prompt_templates(system_prompt=None):
@@ -80,14 +126,20 @@ def _make_default_prompt_templates(system_prompt=None):
                 "id": "meeting_transcript",
                 "name": "Транскрипт встречи",
                 "system_prompt": (
-                    "Ты — ИИ-ассистент. Проанализируй медиафайл и верни только чистый "
-                    "транскрипт встречи в Markdown.\n"
-                    "Структурируй по времени и спикерам.\n"
-                    "Если спикер не определен, помечай как 'Спикер N'."
+                    "Ты готовишь транскрипт встречи.\n"
+                    "Верни только Markdown, без комментариев и интерпретаций.\n"
+                    "Сохраняй порядок реплик и помечай спикеров последовательно "
+                    "('Спикер 1', 'Спикер 2', ...), если имя не определено.\n\n"
+                    "Структура ответа:\n"
+                    "# Транскрипт встречи\n"
+                    "**Дата:** [Дата]\n\n"
+                    "## Транскрипт\n"
+                    "- [HH:MM:SS] [Спикер]: [Текст реплики]"
                 ),
                 "user_prompt": (
-                    "Сделай транскрипт встречи с идентификацией спикеров.\n\n"
-                    "Дата встречи: {meeting_date}"
+                    "Сделай транскрипт встречи с идентификацией спикеров "
+                    "по приложенным файлам.\n"
+                    "Дата встречи: {meeting_date}."
                 ),
                 "built_in": True,
                 "archived": False,
@@ -96,16 +148,21 @@ def _make_default_prompt_templates(system_prompt=None):
                 "id": "meeting_analysis",
                 "name": "Анализ встречи",
                 "system_prompt": (
-                    "Ты — ИИ-ассистент. Проанализируй встречу и верни Markdown-отчет:\n"
-                    "1) цель и контекст встречи,\n"
-                    "2) договоренности,\n"
-                    "3) разногласия/нерешенные вопросы,\n"
-                    "4) эмоциональный фон участников,\n"
-                    "5) рекомендации по следующим шагам.\n"
-                    "Без вводных фраз и без лишних пояснений."
+                    "Ты готовишь аналитический отчет по встрече.\n"
+                    "Верни только Markdown, без вводных фраз.\n"
+                    "Не выдумывай факты; спорные выводы отмечай как гипотезы.\n\n"
+                    "Структура ответа:\n"
+                    "# Анализ встречи\n"
+                    "## 1. О чем встреча\n"
+                    "## 2. О чем договорились\n"
+                    "## 3. О чем не договорились\n"
+                    "## 4. Настрой участников\n"
+                    "## 5. Риски и следующие шаги"
                 ),
                 "user_prompt": (
-                    "Сделай аналитический отчет по встрече.\n\nДата встречи: {meeting_date}"
+                    "Сделай анализ встречи по приложенным файлам.\n"
+                    "Дата встречи: {meeting_date}.\n"
+                    "Нужен фокус на договоренностях, расхождениях и эмоциональном фоне."
                 ),
                 "built_in": True,
                 "archived": False,
@@ -139,6 +196,29 @@ VIDEO_QUALITY_PRESETS = {
 
 
 class ConfigManager:
+    @staticmethod
+    def _upgrade_legacy_builtin_texts(by_id, defaults):
+        protocol = by_id.get("meeting_protocol")
+        if protocol:
+            if protocol.get("system_prompt", "").strip() in {LEGACY_DEFAULT_SYSTEM_PROMPT.strip()}:
+                protocol["system_prompt"] = defaults["meeting_protocol"]["system_prompt"]
+            if protocol.get("user_prompt", "").strip() in {LEGACY_DEFAULT_USER_PROMPT.strip(), ""}:
+                protocol["user_prompt"] = defaults["meeting_protocol"]["user_prompt"]
+
+        transcript = by_id.get("meeting_transcript")
+        if transcript:
+            if transcript.get("system_prompt", "").strip() in {LEGACY_TRANSCRIPT_SYSTEM_PROMPT.strip()}:
+                transcript["system_prompt"] = defaults["meeting_transcript"]["system_prompt"]
+            if transcript.get("user_prompt", "").strip() in {LEGACY_TRANSCRIPT_USER_PROMPT.strip(), ""}:
+                transcript["user_prompt"] = defaults["meeting_transcript"]["user_prompt"]
+
+        analysis = by_id.get("meeting_analysis")
+        if analysis:
+            if analysis.get("system_prompt", "").strip() in {LEGACY_ANALYSIS_SYSTEM_PROMPT.strip()}:
+                analysis["system_prompt"] = defaults["meeting_analysis"]["system_prompt"]
+            if analysis.get("user_prompt", "").strip() in {LEGACY_ANALYSIS_USER_PROMPT.strip(), ""}:
+                analysis["user_prompt"] = defaults["meeting_analysis"]["user_prompt"]
+
     @staticmethod
     def _normalize_prompt_templates(config):
         legacy_prompt = (config.get("prompt") or DEFAULT_SYSTEM_PROMPT).strip() or DEFAULT_SYSTEM_PROMPT
@@ -186,6 +266,10 @@ class ConfigManager:
                     by_id[built_in["id"]]["system_prompt"] = (
                         by_id[built_in["id"]]["system_prompt"].strip() or legacy_prompt
                     )
+            ConfigManager._upgrade_legacy_builtin_texts(
+                by_id,
+                {t["id"]: t for t in _make_default_prompt_templates(DEFAULT_SYSTEM_PROMPT)["templates"]},
+            )
 
         selected_id = str(templates_cfg.get("selected_template_id") or "").strip()
         valid_ids = {t["id"] for t in normalized if not t.get("archived")}

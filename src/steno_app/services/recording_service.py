@@ -46,7 +46,10 @@ class RecordingService:
         # Do not request permissions here.
         # Permissions are handled explicitly in onboarding window.
         if self.has_pyobjc:
-            if not self.app.permission_manager.is_mic_authorized() or not self.app.permission_manager.is_screen_authorized():
+            if (
+                not self.app.permission_manager.safe_is_mic_authorized(timeout_sec=1.5, default=False)
+                or not self.app.permission_manager.safe_is_screen_authorized(timeout_sec=1.5, default=False)
+            ):
                 rumps.alert(
                     tr("record.permissions_required_title"),
                     tr("record.permissions_missing_body"),

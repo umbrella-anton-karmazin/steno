@@ -2,13 +2,14 @@ import logging
 import os
 import re
 import time
+import json
 from datetime import datetime
 
 import rumps
 from google import genai
 from google.genai import types
 
-from steno_app.config import ConfigManager, DEFAULT_USER_PROMPT, get_selected_prompt_template
+from steno_app.config import ConfigManager, DEFAULT_USER_PROMPT, get_selected_prompt_template, get_prompt_template_by_id
 from steno_app.i18n import tr
 
 
@@ -57,19 +58,83 @@ def build_generation_prompts(video_path, config, system_prompt_text=None, user_p
     meeting_date = get_meeting_date(video_path)
     selected_template = get_selected_prompt_template(config) or {}
 
-    system_prompt = (
-        (system_prompt_text or "").strip()
-        or str(selected_template.get("system_prompt") or "").strip()
-        or str(config.get("prompt") or "").strip()
-    )
+    if system_prompt_text is not None:
+        system_prompt = str(system_prompt_text).strip()
+    else:
+        system_prompt = str(selected_template.get("system_prompt") or "").strip()
+    if not system_prompt:
+        system_prompt = str(config.get("prompt") or "").strip()
 
-    raw_user_prompt = (
-        (user_prompt_text or "").strip()
-        or str(selected_template.get("user_prompt") or "").strip()
-        or DEFAULT_USER_PROMPT
-    )
+    # Important: explicit empty user prompt is valid and should not be replaced.
+    # Fallback to default only when no user prompt source was provided at all.
+    if user_prompt_text is not None:
+        raw_user_prompt = str(user_prompt_text)
+    elif "user_prompt" in selected_template:
+        raw_user_prompt = str(selected_template.get("user_prompt") or "")
+    else:
+        raw_user_prompt = DEFAULT_USER_PROMPT
+
     final_user_prompt = raw_user_prompt.replace("{meeting_date}", meeting_date)
     return system_prompt, final_user_prompt
+
+
+def build_protocol_metadata(
+    video_path,
+    mic_audio_path,
+    txt_path,
+    config,
+    template_id,
+    system_prompt_text,
+    user_prompt_text,
+    usage_metadata,
+):
+    selected_template = get_prompt_template_by_id(config, template_id) or {}
+    generated_at = datetime.now().isoformat(timespec="seconds")
+
+    total_tokens = None
+    prompt_tokens = None
+    candidates_tokens = None
+    if usage_metadata:
+        try:
+            total_tokens = getattr(usage_metadata, "total_token_count", None)
+            prompt_tokens = getattr(usage_metadata, "prompt_token_count", None)
+            candidates_tokens = getattr(usage_metadata, "candidates_token_count", None)
+        except Exception:
+            pass
+
+    sources = [os.path.basename(video_path)]
+    if mic_audio_path and os.path.exists(mic_audio_path):
+        sources.append(os.path.basename(mic_audio_path))
+
+    return {
+        "schema_version": 1,
+        "protocol_variant": "default",  # foundation for future multi-protocol variants
+        "generated_at": generated_at,
+        "recording_file": os.path.basename(video_path),
+        "protocol_file": os.path.basename(txt_path),
+        "template_id": template_id or "",
+        "template_name": str(selected_template.get("name") or ""),
+        "model_name": str(config.get("model_name") or ""),
+        "base_url": str(config.get("base_url") or ""),
+        "system_prompt": str(system_prompt_text or ""),
+        "user_prompt": str(user_prompt_text or ""),
+        "source_files": sources,
+        "usage": {
+            "total_tokens": total_tokens,
+            "prompt_tokens": prompt_tokens,
+            "candidates_tokens": candidates_tokens,
+        },
+    }
+
+
+def write_protocol_metadata(meta_path, metadata):
+    try:
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        logger.exception("Failed to write protocol metadata: %s", meta_path)
+        return False
 
 
 def process_video_with_ai(
@@ -78,6 +143,7 @@ def process_video_with_ai(
     app_instance,
     system_prompt_override=None,
     user_prompt_override=None,
+    template_id_override=None,
 ):
     try:
         app_instance.is_processing = True
@@ -161,6 +227,8 @@ def process_video_with_ai(
         # 5. Генерация контента
         logger.info(f"Generating protocol with model: {config.get('model_name')}")
 
+        selected_template = get_selected_prompt_template(config) or {}
+        template_id = str(template_id_override or selected_template.get("id") or "")
         system_instruction, user_prompt_text = build_generation_prompts(
             video_path=video_path,
             config=config,
@@ -168,8 +236,10 @@ def process_video_with_ai(
             user_prompt_text=user_prompt_override,
         )
 
-        # Собираем контент: [File1, File2, ..., UserPrompt]
-        contents = ready_files + [user_prompt_text]
+        # Собираем контент: [File1, File2, ..., UserPrompt(optional)]
+        contents = list(ready_files)
+        if str(user_prompt_text or "").strip():
+            contents.append(user_prompt_text)
 
         response = client.models.generate_content(
             model=config.get("model_name"),
@@ -197,6 +267,18 @@ def process_video_with_ai(
             f.write(response.text)
 
         logger.info(f"Protocol saved to: {txt_path}")
+        meta_path = base_name + "_protocol.meta.json"
+        metadata = build_protocol_metadata(
+            video_path=video_path,
+            mic_audio_path=mic_audio_path,
+            txt_path=txt_path,
+            config=config,
+            template_id=template_id,
+            system_prompt_text=system_instruction,
+            user_prompt_text=user_prompt_text,
+            usage_metadata=getattr(response, "usage_metadata", None),
+        )
+        write_protocol_metadata(meta_path, metadata)
 
         # 6. Удаление файлов из облака
         for uf in ready_files:

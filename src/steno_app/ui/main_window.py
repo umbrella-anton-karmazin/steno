@@ -19,6 +19,8 @@ class MainWindowController(
             self.recording_files = []
             self.selected_recording = None
             self.prompt_drafts = {}
+            self.user_prompt_drafts = {}
+            self.template_id_drafts = {}
             self.prompt_loaded_for = None
             self.video_duration_cache = {}
             self.inline_rename_row = None
@@ -68,8 +70,17 @@ class MainWindowController(
     def onProcessSelected_(self, obj):
         return MainWindowActionsMixin.onProcessSelected_(self, obj)
 
+    def onPromptTemplateChanged_(self, obj):
+        return MainWindowActionsMixin.onPromptTemplateChanged_(self, obj)
+
     def onCopyProtocol_(self, obj):
         return MainWindowActionsMixin.onCopyProtocol_(self, obj)
+
+    def onCopyProtocolMarkdown_(self, obj):
+        return MainWindowActionsMixin.onCopyProtocolMarkdown_(self, obj)
+
+    def onCopyProtocolRendered_(self, obj):
+        return MainWindowActionsMixin.onCopyProtocolRendered_(self, obj)
 
     def onContextRename_(self, obj):
         return MainWindowActionsMixin.onContextRename_(self, obj)
@@ -88,6 +99,24 @@ class MainWindowController(
 
     def onSelectModel_(self, obj):
         return MainWindowActionsMixin.onSelectModel_(self, obj)
+
+    def onSelectPromptTemplate_(self, obj):
+        return MainWindowActionsMixin.onSelectPromptTemplate_(self, obj)
+
+    def onCreatePromptTemplate_(self, obj):
+        return MainWindowActionsMixin.onCreatePromptTemplate_(self, obj)
+
+    def onEditPromptTemplate_(self, obj):
+        return MainWindowActionsMixin.onEditPromptTemplate_(self, obj)
+
+    def onArchivePromptTemplate_(self, obj):
+        return MainWindowActionsMixin.onArchivePromptTemplate_(self, obj)
+
+    def onRestorePromptTemplate_(self, obj):
+        return MainWindowActionsMixin.onRestorePromptTemplate_(self, obj)
+
+    def onDeletePromptTemplate_(self, obj):
+        return MainWindowActionsMixin.onDeletePromptTemplate_(self, obj)
 
     def onSetApiKey_(self, obj):
         return MainWindowActionsMixin.onSetApiKey_(self, obj)

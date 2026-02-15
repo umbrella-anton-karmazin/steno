@@ -15,6 +15,13 @@ except Exception:
     CMTimeGetSeconds = None
 
 from steno_app.i18n import tr
+from steno_app.config import (
+    ConfigManager,
+    get_prompt_template_by_id,
+    get_prompt_templates,
+    get_selected_prompt_template,
+    set_selected_prompt_template,
+)
 from steno_app.ui.main_window_view import SidebarRecordingCellView, SidebarRecordingRowView
 
 
@@ -399,22 +406,28 @@ class MainWindowStateMixin:
         return duration_seconds
 
     @objc.python_method
-    def _estimate_prompt_height(self):
-        minimum = 120.0
-        maximum = 320.0
+    def _estimate_text_height(self, text_view, minimum, maximum):
         try:
-            self.prompt_text.layoutManager().glyphRangeForTextContainer_(self.prompt_text.textContainer())
-            used = self.prompt_text.layoutManager().usedRectForTextContainer_(self.prompt_text.textContainer())
+            text_view.layoutManager().glyphRangeForTextContainer_(text_view.textContainer())
+            used = text_view.layoutManager().usedRectForTextContainer_(text_view.textContainer())
             estimated = float(used.size.height) + 18.0
             return max(minimum, min(maximum, estimated))
         except Exception:
             try:
-                text = str(self.prompt_text.string() or "")
+                text = str(text_view.string() or "")
                 lines = max(1, len(text.splitlines()))
                 estimated = 18.0 + lines * 18.0
                 return max(minimum, min(maximum, estimated))
             except Exception:
                 return minimum
+
+    @objc.python_method
+    def _estimate_prompt_height(self):
+        return self._estimate_text_height(self.prompt_text, minimum=120.0, maximum=300.0)
+
+    @objc.python_method
+    def _estimate_user_prompt_height(self):
+        return self._estimate_text_height(self.user_prompt_text, minimum=84.0, maximum=220.0)
 
     @objc.python_method
     def _apply_dynamic_detail_layout(self, status):
@@ -427,6 +440,8 @@ class MainWindowStateMixin:
         title_h = 28.0
         files_h = 76.0
         controls_h = 30.0
+        template_label_h = 20.0
+        template_popup_h = 28.0
         prompt_label_h = 24.0
         hint_h = 18.0
         info_h = 58.0
@@ -443,8 +458,17 @@ class MainWindowStateMixin:
         cursor_top = files_y
 
         if status == "unprocessed":
-            # tighter gap between files and prompt
+            # tighter gap between files and form controls
             cursor_top -= 8.0
+
+            template_label_y = cursor_top - template_label_h
+            self.prompt_template_label.setFrame_(((pad, template_label_y), (320.0, template_label_h)))
+            cursor_top = template_label_y - 6.0
+
+            template_popup_y = cursor_top - template_popup_h
+            self.prompt_template_popup.setFrame_(((pad, template_popup_y), (380.0, template_popup_h)))
+            cursor_top = template_popup_y - 10.0
+
             prompt_label_y = cursor_top - prompt_label_h
             self.prompt_label.setFrame_(((pad, prompt_label_y), (260.0, prompt_label_h)))
             cursor_top = prompt_label_y - 6.0
@@ -456,7 +480,20 @@ class MainWindowStateMixin:
 
             hint_y = cursor_top - hint_h
             self.prompt_hint_label.setFrame_(((pad, hint_y), (full_w, hint_h)))
-            cursor_top = hint_y - 8.0
+            cursor_top = hint_y - 10.0
+
+            user_prompt_label_y = cursor_top - prompt_label_h
+            self.user_prompt_label.setFrame_(((pad, user_prompt_label_y), (260.0, prompt_label_h)))
+            cursor_top = user_prompt_label_y - 6.0
+
+            user_prompt_h = self._estimate_user_prompt_height()
+            user_prompt_y = cursor_top - user_prompt_h
+            self.user_prompt_scroll.setFrame_(((pad, user_prompt_y), (full_w, user_prompt_h)))
+            cursor_top = user_prompt_y - 4.0
+
+            user_hint_y = cursor_top - hint_h
+            self.user_prompt_hint_label.setFrame_(((pad, user_hint_y), (full_w, hint_h)))
+            cursor_top = user_hint_y - 8.0
 
             # \"No protocol yet\" message area
             protocol_y = cursor_top - info_h
@@ -469,6 +506,7 @@ class MainWindowStateMixin:
             self.loader.setFrame_(((pad + 150.0, controls_y + 3.0), (24.0, 24.0)))
             self.copy_protocol_button.setFrame_(((pad, controls_y), (140.0, controls_h)))
         else:
+            self.prompt_template_popup.setFrame_(((pad, root_h + 200.0), (380.0, template_popup_h)))
             # tighter gap between files and controls
             controls_y = cursor_top - 8.0 - controls_h
             self.process_button.setFrame_(((pad, controls_y), (120.0, controls_h)))
@@ -494,6 +532,74 @@ class MainWindowStateMixin:
             return self.app.config.get("prompt", "")
 
     @objc.python_method
+    def _current_user_prompt_text(self):
+        try:
+            return str(self.user_prompt_text.string())
+        except Exception:
+            selected = get_selected_prompt_template(self.app.config) or {}
+            return str(selected.get("user_prompt") or "")
+
+    @objc.python_method
+    def _reload_prompt_templates_popup(self, selected_template_id=None):
+        templates = get_prompt_templates(self.app.config, include_archived=False)
+        self.prompt_template_popup.removeAllItems()
+        for template in templates:
+            name = self._template_display_name(template, include_builtin_marker=False)
+            self.prompt_template_popup.addItemWithTitle_(name)
+            try:
+                item = self.prompt_template_popup.lastItem()
+                if item is not None:
+                    item.setRepresentedObject_(str(template.get("id") or ""))
+            except Exception:
+                pass
+        if not templates:
+            return
+        target_id = str(selected_template_id or "").strip()
+        if not target_id:
+            current = get_selected_prompt_template(self.app.config) or {}
+            target_id = str(current.get("id") or "").strip()
+        selected_index = 0
+        for idx, template in enumerate(templates):
+            if str(template.get("id") or "") == target_id:
+                selected_index = idx
+                break
+        self.prompt_template_popup.selectItemAtIndex_(selected_index)
+
+    @objc.python_method
+    def _selected_template_id_from_popup(self):
+        try:
+            item = self.prompt_template_popup.selectedItem()
+            if item is None:
+                return ""
+            value = item.representedObject()
+            return str(value or "")
+        except Exception:
+            return ""
+
+    @objc.python_method
+    def apply_prompt_template_for_selected(self, template_id):
+        if not self.selected_recording:
+            return
+        if self._status_for_recording(self.selected_recording) != "unprocessed":
+            return
+        template = get_prompt_template_by_id(self.app.config, template_id)
+        if not template or template.get("archived"):
+            return
+
+        system_text = str(template.get("system_prompt") or "")
+        user_text = str(template.get("user_prompt") or "")
+        self.prompt_text.setString_(system_text)
+        self.user_prompt_text.setString_(user_text)
+        self.prompt_drafts[self.selected_recording] = system_text
+        self.user_prompt_drafts[self.selected_recording] = user_text
+        self.template_id_drafts[self.selected_recording] = str(template.get("id") or "")
+
+        if set_selected_prompt_template(self.app.config, template.get("id")):
+            ConfigManager.save(self.app.config)
+
+        self.refresh_detail_view()
+
+    @objc.python_method
     def _remember_prompt_draft_for_selected(self):
         if not self.selected_recording:
             return
@@ -504,6 +610,10 @@ class MainWindowStateMixin:
         if self._status_for_recording(self.selected_recording) != "unprocessed":
             return
         self.prompt_drafts[self.selected_recording] = self._current_prompt_text()
+        self.user_prompt_drafts[self.selected_recording] = self._current_user_prompt_text()
+        selected_template_id = self._selected_template_id_from_popup()
+        if selected_template_id:
+            self.template_id_drafts[self.selected_recording] = selected_template_id
 
     @objc.python_method
     def _is_recording_file(self, filename):
@@ -586,9 +696,14 @@ class MainWindowStateMixin:
             self.files_label.setStringValue_(tr("main.files_default"))
             self.process_button.setHidden_(True)
             self.copy_protocol_button.setHidden_(True)
+            self.prompt_template_label.setHidden_(True)
+            self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)
             self.prompt_scroll.setHidden_(True)
             self.prompt_hint_label.setHidden_(True)
+            self.user_prompt_label.setHidden_(True)
+            self.user_prompt_scroll.setHidden_(True)
+            self.user_prompt_hint_label.setHidden_(True)
             self.prompt_loaded_for = None
             self.loader.stopAnimation_(None)
             self._set_protocol_text(tr("main.select_recording_hint"), parse_markdown=False)
@@ -604,10 +719,26 @@ class MainWindowStateMixin:
 
         # Load draft/config prompt before layout so dynamic textarea height is based on actual text.
         if status == "unprocessed" and self.prompt_loaded_for != video_name:
+            template_id = self.template_id_drafts.get(video_name)
+            if not template_id:
+                selected_template = get_selected_prompt_template(self.app.config) or {}
+                template_id = selected_template.get("id")
+            template = get_prompt_template_by_id(self.app.config, template_id) or get_selected_prompt_template(self.app.config) or {}
+            template_id = str(template.get("id") or "")
+
             prompt_value = self.prompt_drafts.get(video_name)
             if prompt_value is None:
-                prompt_value = self.app.config.get("prompt", "")
-            self.prompt_text.setString_(prompt_value)
+                prompt_value = str(template.get("system_prompt") or self.app.config.get("prompt", ""))
+            self.prompt_text.setString_(str(prompt_value))
+
+            user_prompt_value = self.user_prompt_drafts.get(video_name)
+            if user_prompt_value is None:
+                user_prompt_value = str(template.get("user_prompt") or "")
+            self.user_prompt_text.setString_(str(user_prompt_value))
+
+            self._reload_prompt_templates_popup(template_id)
+            if template_id:
+                self.template_id_drafts[video_name] = template_id
             self.prompt_loaded_for = video_name
 
         self._apply_dynamic_detail_layout(status)
@@ -631,32 +762,52 @@ class MainWindowStateMixin:
             self.process_button.setHidden_(False)
             self.process_button.setEnabled_(False)
             self.copy_protocol_button.setHidden_(True)
+            self.prompt_template_label.setHidden_(True)
+            self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)
             self.prompt_scroll.setHidden_(True)
             self.prompt_hint_label.setHidden_(True)
+            self.user_prompt_label.setHidden_(True)
+            self.user_prompt_scroll.setHidden_(True)
+            self.user_prompt_hint_label.setHidden_(True)
             self.loader.startAnimation_(None)
         elif status == "unprocessed":
             self.process_button.setHidden_(False)
             self.process_button.setEnabled_(not self.app.is_processing)
             self.copy_protocol_button.setHidden_(True)
+            self.prompt_template_label.setHidden_(False)
+            self.prompt_template_popup.setHidden_(False)
             self.prompt_label.setHidden_(False)
             self.prompt_scroll.setHidden_(False)
             self.prompt_hint_label.setHidden_(False)
+            self.user_prompt_label.setHidden_(False)
+            self.user_prompt_scroll.setHidden_(False)
+            self.user_prompt_hint_label.setHidden_(False)
             self.loader.stopAnimation_(None)
         elif status == "recording":
             self.process_button.setHidden_(True)
             self.copy_protocol_button.setHidden_(True)
+            self.prompt_template_label.setHidden_(True)
+            self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)
             self.prompt_scroll.setHidden_(True)
             self.prompt_hint_label.setHidden_(True)
+            self.user_prompt_label.setHidden_(True)
+            self.user_prompt_scroll.setHidden_(True)
+            self.user_prompt_hint_label.setHidden_(True)
             self.loader.stopAnimation_(None)
         else:
             self.process_button.setHidden_(True)
             self.copy_protocol_button.setHidden_(False)
             self.copy_protocol_button.setEnabled_(has_protocol)
+            self.prompt_template_label.setHidden_(True)
+            self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)
             self.prompt_scroll.setHidden_(True)
             self.prompt_hint_label.setHidden_(True)
+            self.user_prompt_label.setHidden_(True)
+            self.user_prompt_scroll.setHidden_(True)
+            self.user_prompt_hint_label.setHidden_(True)
             self.loader.stopAnimation_(None)
 
         if os.path.exists(protocol_path):
@@ -814,6 +965,12 @@ class MainWindowStateMixin:
             old_draft = self.prompt_drafts.pop(old_name, None)
             if old_draft is not None:
                 self.prompt_drafts[renamed_to] = old_draft
+            old_user_draft = self.user_prompt_drafts.pop(old_name, None)
+            if old_user_draft is not None:
+                self.user_prompt_drafts[renamed_to] = old_user_draft
+            old_template_id = self.template_id_drafts.pop(old_name, None)
+            if old_template_id is not None:
+                self.template_id_drafts[renamed_to] = old_template_id
             self.selected_recording = renamed_to
             self.prompt_loaded_for = None
 
