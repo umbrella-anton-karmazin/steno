@@ -563,7 +563,13 @@ class RecorderApp(rumps.App):
     def open_protocol_file(self, sender):
         self.open_protocol_by_name(sender.title)
 
-    def process_video_file(self, filename, prompt_override=None):
+    def process_video_file(
+        self,
+        filename,
+        system_prompt_override=None,
+        user_prompt_override=None,
+        prompt_override=None,
+    ):
         if self.is_processing:
             return
         api_key = (self.config.get("api_key") or "").strip()
@@ -576,10 +582,19 @@ class RecorderApp(rumps.App):
             return
         video_path = os.path.join(self.config["save_dir"], filename)
         if os.path.exists(video_path):
+            # Backward compatibility for older call-sites.
+            if system_prompt_override is None and prompt_override is not None:
+                system_prompt_override = prompt_override
             self.current_processing_file = filename
             threading.Thread(
                 target=process_video_with_ai,
-                args=(video_path, self.config, self, prompt_override),
+                args=(
+                    video_path,
+                    self.config,
+                    self,
+                    system_prompt_override,
+                    user_prompt_override,
+                ),
                 daemon=True
             ).start()
 

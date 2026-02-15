@@ -41,6 +41,13 @@ from AppKit import (
 
 from steno_app.i18n import tr
 
+try:
+    from WebKit import WKWebView
+    HAS_WEBKIT = True
+except Exception:
+    WKWebView = None
+    HAS_WEBKIT = False
+
 
 class PromptTextView(NSTextView):
     def keyDown_(self, event):
@@ -446,17 +453,6 @@ class MainWindowViewMixin:
             self.settings_button.setFont_(NSFont.systemFontOfSize_(18.0))
         self.sidebar_view.addSubview_(self.settings_button)
 
-        self.made_by_link = self._sidebar_button(
-            ((self.sidebar_pad_x + 50.0, 40.0), (self.sidebar_inner_width - 50.0, 22.0)),
-            tr("main.made_by"),
-            "onOpenLink:",
-            mode="ghost",
-        )
-        self.made_by_link.setAutoresizingMask_(NSViewWidthSizable | NSViewMaxYMargin)
-        self.made_by_link.setContentTintColor_(NSColor.systemBlueColor())
-        self.made_by_link.setFont_(NSFont.systemFontOfSize_(12.0))
-        self.sidebar_view.addSubview_(self.made_by_link)
-
         self.detail_title_label = self._label(
             ((24.0, self.content_view.bounds()[1][1] - 52.0), (760.0, 28.0)),
             tr("main.select_recording"),
@@ -537,17 +533,26 @@ class MainWindowViewMixin:
         self.prompt_hint_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
         self.content_view.addSubview_(self.prompt_hint_label)
 
-        self.protocol_scroll = NSScrollView.alloc().initWithFrame_(((24.0, 24.0), (self.content_view.bounds()[1][0] - 48.0, self.content_view.bounds()[1][1] - 396.0)))
-        self.protocol_scroll.setHasVerticalScroller_(True)
-        self.protocol_scroll.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
-        self.protocol_text = NSTextView.alloc().initWithFrame_(self.protocol_scroll.bounds())
-        self.protocol_text.setEditable_(False)
-        self.protocol_text.setSelectable_(True)
-        self.protocol_text.setRichText_(True)
-        self.protocol_text.setFont_(NSFont.systemFontOfSize_(13.0))
-        self.protocol_text.setDrawsBackground_(True)
-        self.protocol_scroll.setDocumentView_(self.protocol_text)
-        self.content_view.addSubview_(self.protocol_scroll)
+        protocol_frame = ((24.0, 24.0), (self.content_view.bounds()[1][0] - 48.0, self.content_view.bounds()[1][1] - 396.0))
+        if HAS_WEBKIT:
+            self.protocol_web_view = WKWebView.alloc().initWithFrame_(protocol_frame)
+            self.protocol_web_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+            self.protocol_scroll = self.protocol_web_view
+            self.protocol_text = None
+            self.content_view.addSubview_(self.protocol_web_view)
+        else:
+            self.protocol_web_view = None
+            self.protocol_scroll = NSScrollView.alloc().initWithFrame_(protocol_frame)
+            self.protocol_scroll.setHasVerticalScroller_(True)
+            self.protocol_scroll.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+            self.protocol_text = NSTextView.alloc().initWithFrame_(self.protocol_scroll.bounds())
+            self.protocol_text.setEditable_(False)
+            self.protocol_text.setSelectable_(True)
+            self.protocol_text.setRichText_(True)
+            self.protocol_text.setFont_(NSFont.systemFontOfSize_(13.0))
+            self.protocol_text.setDrawsBackground_(True)
+            self.protocol_scroll.setDocumentView_(self.protocol_text)
+            self.content_view.addSubview_(self.protocol_scroll)
 
         self._layout_root_views()
         self.refresh_all()

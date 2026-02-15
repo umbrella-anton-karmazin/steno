@@ -1,5 +1,6 @@
 import os
 import re
+from html import escape
 
 import objc
 import rumps
@@ -18,6 +19,155 @@ from steno_app.ui.main_window_view import SidebarRecordingCellView, SidebarRecor
 
 
 class MainWindowStateMixin:
+    @objc.python_method
+    def _apply_inline_bold_html(self, text):
+        raw = str(text or "")
+        parts = re.split(r"(\*\*.*?\*\*)", raw)
+        out = []
+        for part in parts:
+            if part.startswith("**") and part.endswith("**") and len(part) >= 4:
+                out.append(f"<strong>{escape(part[2:-2])}</strong>")
+            else:
+                out.append(escape(part))
+        return "".join(out)
+
+    @objc.python_method
+    def _markdown_to_html(self, text):
+        lines = str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        html = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+            if not stripped:
+                html.append("<div class='spacer'></div>")
+                i += 1
+                continue
+
+            # Tables
+            if self._is_table_line(line):
+                block = []
+                j = i
+                while j < len(lines) and self._is_table_line(lines[j]):
+                    block.append(lines[j])
+                    j += 1
+                rows = [self._split_table_row(x) for x in block]
+                rows = [r for r in rows if r]
+                if rows:
+                    html.append("<table><tbody>")
+                    header_done = False
+                    for row in rows:
+                        if self._is_table_separator_row(row):
+                            header_done = True
+                            continue
+                        tag = "th" if not header_done else "td"
+                        html.append("<tr>")
+                        for cell in row:
+                            html.append(f"<{tag}>{self._apply_inline_bold_html(cell)}</{tag}>")
+                        html.append("</tr>")
+                    html.append("</tbody></table>")
+                i = j
+                continue
+
+            # Headings
+            if stripped.startswith("### "):
+                html.append(f"<h3>{self._apply_inline_bold_html(stripped[4:])}</h3>")
+                i += 1
+                continue
+            if stripped.startswith("## "):
+                html.append(f"<h2>{self._apply_inline_bold_html(stripped[3:])}</h2>")
+                i += 1
+                continue
+            if stripped.startswith("# "):
+                html.append(f"<h1>{self._apply_inline_bold_html(stripped[2:])}</h1>")
+                i += 1
+                continue
+
+            # Bullet list
+            if stripped.startswith("* "):
+                html.append("<ul>")
+                while i < len(lines) and lines[i].strip().startswith("* "):
+                    li = lines[i].strip()[2:]
+                    html.append(f"<li>{self._apply_inline_bold_html(li)}</li>")
+                    i += 1
+                html.append("</ul>")
+                continue
+
+            # Paragraph (preserve manual line breaks until blank/special block)
+            para = [line]
+            j = i + 1
+            while j < len(lines):
+                nxt = lines[j]
+                s = nxt.strip()
+                if not s:
+                    break
+                if s.startswith("#") or s.startswith("* ") or self._is_table_line(nxt):
+                    break
+                para.append(nxt)
+                j += 1
+            html.append("<p>" + "<br/>".join(self._apply_inline_bold_html(x) for x in para) + "</p>")
+            i = j
+
+        body = "\n".join(html)
+        return f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root {{ color-scheme: light dark; }}
+    html, body {{
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.45;
+      background: transparent;
+      color: inherit;
+    }}
+    .wrap {{ padding: 4px 4px 8px 4px; }}
+    h1 {{ font-size: 1.40em; margin: 0.7em 0 0.25em; }}
+    h2 {{ font-size: 1.20em; margin: 0.7em 0 0.25em; }}
+    h3 {{ font-size: 1.08em; margin: 0.65em 0 0.22em; }}
+    p {{ margin: 0.35em 0; }}
+    ul {{ margin: 0.25em 0 0.55em 1.25em; padding: 0; }}
+    li {{ margin: 0.2em 0; }}
+    .spacer {{ height: 0.55em; }}
+    table {{
+      border-collapse: collapse;
+      margin: 0.45em 0 0.65em;
+      width: 100%;
+      font-size: 0.95em;
+    }}
+    th, td {{
+      border: 1px solid rgba(127,127,127,0.32);
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: top;
+    }}
+    th {{ background: rgba(127,127,127,0.12); font-weight: 600; }}
+  </style>
+</head>
+<body><div class="wrap">{body}</div></body>
+</html>"""
+
+    @objc.python_method
+    def _plain_to_html(self, text):
+        value = escape(str(text or ""))
+        return f"""<!doctype html>
+<html><head><meta charset="utf-8" />
+<style>
+  :root {{ color-scheme: light dark; }}
+  html, body {{
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 12px;
+    line-height: 1.45;
+    background: transparent;
+    color: inherit;
+  }}
+  .wrap {{ white-space: pre-wrap; padding: 4px; }}
+</style>
+</head><body><div class="wrap">{value}</div></body></html>"""
+
     @objc.python_method
     def _is_table_line(self, line):
         stripped = (line or "").strip()
@@ -176,6 +326,14 @@ class MainWindowStateMixin:
     @objc.python_method
     def _set_protocol_text(self, text, parse_markdown=True):
         value = str(text or "")
+        web_view = getattr(self, "protocol_web_view", None)
+        if web_view is not None:
+            try:
+                html = self._markdown_to_html(value) if parse_markdown else self._plain_to_html(value)
+                web_view.loadHTMLString_baseURL_(html, None)
+                return
+            except Exception:
+                pass
         if parse_markdown and value:
             try:
                 attributed = self._build_markdown_attributed(value)

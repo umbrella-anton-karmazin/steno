@@ -22,7 +22,7 @@ class MainWindowActionsMixin:
             return
         self._remember_prompt_draft_for_selected()
         final_prompt = self.prompt_drafts.get(self.selected_recording, self.app.config.get("prompt", ""))
-        self.app.process_video_file(self.selected_recording, prompt_override=final_prompt)
+        self.app.process_video_file(self.selected_recording, system_prompt_override=final_prompt)
         self.refresh_from_state()
         self.refresh_file_lists()
         self.refresh_detail_view()
@@ -131,6 +131,11 @@ class MainWindowActionsMixin:
         usage_total.setEnabled_(False)
         menu.addItem_(usage_last)
         menu.addItem_(usage_total)
+
+        menu.addItem_(NSMenuItem.separatorItem())
+        made_by_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("menu.made_by"), "onOpenLink:", "")
+        made_by_item.setTarget_(self)
+        menu.addItem_(made_by_item)
 
         NSMenu.popUpContextMenu_withEvent_forView_(menu, NSApp().currentEvent(), sender)
 

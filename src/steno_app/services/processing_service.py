@@ -8,7 +8,7 @@ import rumps
 from google import genai
 from google.genai import types
 
-from steno_app.config import ConfigManager
+from steno_app.config import ConfigManager, DEFAULT_USER_PROMPT, get_selected_prompt_template
 from steno_app.i18n import tr
 
 
@@ -53,7 +53,32 @@ def get_meeting_date(filename):
     return datetime.now().strftime("%Y-%m-%d")
 
 
-def process_video_with_ai(video_path, config, app_instance, prompt_override=None):
+def build_generation_prompts(video_path, config, system_prompt_text=None, user_prompt_text=None):
+    meeting_date = get_meeting_date(video_path)
+    selected_template = get_selected_prompt_template(config) or {}
+
+    system_prompt = (
+        (system_prompt_text or "").strip()
+        or str(selected_template.get("system_prompt") or "").strip()
+        or str(config.get("prompt") or "").strip()
+    )
+
+    raw_user_prompt = (
+        (user_prompt_text or "").strip()
+        or str(selected_template.get("user_prompt") or "").strip()
+        or DEFAULT_USER_PROMPT
+    )
+    final_user_prompt = raw_user_prompt.replace("{meeting_date}", meeting_date)
+    return system_prompt, final_user_prompt
+
+
+def process_video_with_ai(
+    video_path,
+    config,
+    app_instance,
+    system_prompt_override=None,
+    user_prompt_override=None,
+):
     try:
         app_instance.is_processing = True
         app_instance.request_set_state_icon("processing")
@@ -136,12 +161,12 @@ def process_video_with_ai(video_path, config, app_instance, prompt_override=None
         # 5. Генерация контента
         logger.info(f"Generating protocol with model: {config.get('model_name')}")
 
-        # Формируем жесткий User Prompt с датой
-        meeting_date = get_meeting_date(video_path)
-        user_prompt_text = f"Составь протокол по прикрепленному файлу.\n\nДата встречи: {meeting_date}"
-
-        # Системный промпт: берем итоговый текст из UI (если передан), иначе из конфига.
-        system_instruction = (prompt_override or config.get("prompt", "")).strip() or config.get("prompt", "")
+        system_instruction, user_prompt_text = build_generation_prompts(
+            video_path=video_path,
+            config=config,
+            system_prompt_text=system_prompt_override,
+            user_prompt_text=user_prompt_override,
+        )
 
         # Собираем контент: [File1, File2, ..., UserPrompt]
         contents = ready_files + [user_prompt_text]
