@@ -38,6 +38,9 @@ if [ "$PYTHON_BIN_IS_DEFAULT" -eq 1 ]; then
     PYTHON_BIN=".venv/bin/python"
   elif [ "$ARCH" = "x86_64" ] && [ "$HOST_ARCH" = "arm64" ]; then
     echo "Готовим x86_64 окружение (.venv-x86) под Rosetta..."
+    if [ -d ".venv-x86" ] && { [ ! -x ".venv-x86/bin/python" ] || [ ! -e ".venv-x86/bin/python3" ]; }; then
+      rm -rf .venv-x86
+    fi
     if [ -x ".venv-x86/bin/python" ] && ! file .venv-x86/bin/python | grep -q "x86_64"; then
       rm -rf .venv-x86
     fi
