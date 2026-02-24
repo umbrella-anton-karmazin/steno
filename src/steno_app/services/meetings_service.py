@@ -410,6 +410,58 @@ class MeetingsService:
         self.app.request_ui_refresh()
         return not failed
 
+    def delete_processing_result_interactive(self, filename):
+        if not filename:
+            return False
+        if self._is_recording_locked_for_edit(filename):
+            return False
+
+        paths = self._paths_for_recording(filename)
+        if not os.path.exists(paths["protocol"]) and not os.path.exists(paths["protocol_meta"]):
+            return False
+
+        confirmed = False
+        if self.has_pyobjc and NSAlert is not None:
+            alert = NSAlert.alloc().init()
+            alert.setMessageText_(tr("delete_processing_result.confirm_title"))
+            alert.setInformativeText_(tr("delete_processing_result.confirm_body", filename=filename))
+            try:
+                alert.setAlertStyle_(NSAlertStyleWarning)
+            except Exception:
+                pass
+            alert.addButtonWithTitle_(tr("delete_processing_result.confirm_button"))
+            alert.addButtonWithTitle_(tr("common.cancel"))
+            confirmed = (alert.runModal() == 1000)
+        else:
+            confirmed = bool(
+                rumps.alert(
+                    tr("delete_processing_result.confirm_title"),
+                    tr("delete_processing_result.confirm_fallback_body"),
+                )
+            )
+        if not confirmed:
+            return False
+
+        removed = []
+        failed = []
+        for key in ("protocol", "protocol_meta"):
+            path = paths[key]
+            if not os.path.exists(path):
+                continue
+            try:
+                os.remove(path)
+                removed.append(os.path.basename(path))
+            except Exception as e:
+                failed.append(f"{os.path.basename(path)}: {e}")
+
+        if removed:
+            rumps.notification(tr("delete_processing_result.done_title"), tr("delete_processing_result.done_body"), filename)
+        if failed:
+            rumps.alert(tr("delete_processing_result.error_title"), "\n".join(failed))
+
+        self.app.request_ui_refresh()
+        return not failed
+
     # Compatibility alias for older call sites.
     def delete_recording_interactive(self, filename):
         return self.delete_recording_with_files_interactive(filename)

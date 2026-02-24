@@ -515,7 +515,16 @@ class MainWindowViewMixin:
         self.copy_protocol_button.setAutoresizingMask_(NSViewMaxXMargin | NSViewMinYMargin)
         self.content_view.addSubview_(self.copy_protocol_button)
 
-        self.loader = NSProgressIndicator.alloc().initWithFrame_(((308.0, self.content_view.bounds()[1][1] - 160.0), (24.0, 24.0)))
+        self.delete_protocol_button = self._sidebar_button(
+            ((308.0, self.content_view.bounds()[1][1] - 160.0), (220.0, 30.0)),
+            tr("main.delete_processing_result"),
+            "onDeleteProcessingResult:",
+            mode="secondary",
+        )
+        self.delete_protocol_button.setAutoresizingMask_(NSViewMaxXMargin | NSViewMinYMargin)
+        self.content_view.addSubview_(self.delete_protocol_button)
+
+        self.loader = NSProgressIndicator.alloc().initWithFrame_(((540.0, self.content_view.bounds()[1][1] - 160.0), (24.0, 24.0)))
         self.loader.setStyle_(0)
         self.loader.setDisplayedWhenStopped_(False)
         self.loader.setAutoresizingMask_(NSViewMaxXMargin | NSViewMinYMargin)
@@ -654,6 +663,10 @@ class MainWindowViewMixin:
         self.ctx_archive_item.setTarget_(self)
         self.recordings_context_menu.addItem_(self.ctx_archive_item)
 
+        self.ctx_delete_processing_result_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("main.ctx_delete_processing_result"), "onContextDeleteProcessingResult:", "")
+        self.ctx_delete_processing_result_item.setTarget_(self)
+        self.recordings_context_menu.addItem_(self.ctx_delete_processing_result_item)
+
         self.recordings_context_menu.addItem_(NSMenuItem.separatorItem())
 
         self.ctx_delete_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("main.ctx_delete"), "onContextDelete:", "")
@@ -667,8 +680,10 @@ class MainWindowViewMixin:
         has_selected = bool(self.selected_recording and self.selected_recording in self.recording_files)
         status = self._status_for_recording(self.selected_recording) if has_selected else "none"
         can_modify = has_selected and status not in ("recording", "processing")
+        can_delete_processing_result = has_selected and status == "processed"
         self.ctx_rename_item.setEnabled_(can_modify)
         self.ctx_archive_item.setEnabled_(can_modify)
+        self.ctx_delete_processing_result_item.setEnabled_(can_delete_processing_result)
         self.ctx_delete_item.setEnabled_(can_modify)
 
     def windowDidResize_(self, _):

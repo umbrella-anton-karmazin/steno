@@ -527,13 +527,15 @@ class MainWindowStateMixin:
             self.process_button.setFrame_(((pad, controls_y), (140.0, controls_h)))
             self.loader.setFrame_(((pad + 150.0, controls_y + 3.0), (24.0, 24.0)))
             self.copy_protocol_button.setFrame_(((pad, controls_y), (140.0, controls_h)))
+            self.delete_protocol_button.setFrame_(((pad + 148.0, controls_y), (220.0, controls_h)))
         else:
             self.prompt_template_popup.setFrame_(((pad, root_h + 200.0), (380.0, template_popup_h)))
             # tighter gap between files and controls
             controls_y = cursor_top - 8.0 - controls_h
             self.process_button.setFrame_(((pad, controls_y), (120.0, controls_h)))
             self.copy_protocol_button.setFrame_(((pad, controls_y), (140.0, controls_h)))
-            self.loader.setFrame_(((pad + 132.0, controls_y + 3.0), (24.0, 24.0)))
+            self.delete_protocol_button.setFrame_(((pad + 148.0, controls_y), (220.0, controls_h)))
+            self.loader.setFrame_(((pad + 376.0, controls_y + 3.0), (24.0, 24.0)))
 
             # protocol starts right below controls (no excessive blank area)
             protocol_top = controls_y - 8.0
@@ -724,6 +726,7 @@ class MainWindowStateMixin:
             self.files_label.setStringValue_(tr("main.files_default"))
             self.process_button.setHidden_(True)
             self.copy_protocol_button.setHidden_(True)
+            self.delete_protocol_button.setHidden_(True)
             self.prompt_template_label.setHidden_(True)
             self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)
@@ -792,6 +795,7 @@ class MainWindowStateMixin:
             self.process_button.setHidden_(False)
             self.process_button.setEnabled_(False)
             self.copy_protocol_button.setHidden_(True)
+            self.delete_protocol_button.setHidden_(True)
             self.prompt_template_label.setHidden_(True)
             self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)
@@ -805,6 +809,7 @@ class MainWindowStateMixin:
             self.process_button.setHidden_(False)
             self.process_button.setEnabled_(not self.app.is_processing)
             self.copy_protocol_button.setHidden_(True)
+            self.delete_protocol_button.setHidden_(True)
             self.prompt_template_label.setHidden_(False)
             self.prompt_template_popup.setHidden_(False)
             self.prompt_label.setHidden_(False)
@@ -817,6 +822,7 @@ class MainWindowStateMixin:
         elif status == "recording":
             self.process_button.setHidden_(True)
             self.copy_protocol_button.setHidden_(True)
+            self.delete_protocol_button.setHidden_(True)
             self.prompt_template_label.setHidden_(True)
             self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)
@@ -830,6 +836,8 @@ class MainWindowStateMixin:
             self.process_button.setHidden_(True)
             self.copy_protocol_button.setHidden_(False)
             self.copy_protocol_button.setEnabled_(has_protocol)
+            self.delete_protocol_button.setHidden_(False)
+            self.delete_protocol_button.setEnabled_(has_protocol)
             self.prompt_template_label.setHidden_(True)
             self.prompt_template_popup.setHidden_(True)
             self.prompt_label.setHidden_(True)

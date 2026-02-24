@@ -255,6 +255,31 @@ class MainWindowActionsMixin:
         self.refresh_file_lists()
         self.refresh_detail_view()
 
+    def _delete_processing_result_for_selected(self):
+        if not self.selected_recording:
+            return
+        status = self._status_for_recording(self.selected_recording)
+        if status == "recording":
+            rumps.alert(tr("blocked.title"), tr("blocked.recording"))
+            return
+        if status == "processing" or self.app.is_processing:
+            rumps.alert(tr("blocked.title"), tr("blocked.processing"))
+            return
+        if status != "processed":
+            return
+        if self.app.meetings_service.delete_processing_result_interactive(self.selected_recording):
+            # Force "before processing" state recompute for prompt/template controls.
+            self.prompt_loaded_for = None
+        self.refresh_from_state()
+        self.refresh_file_lists()
+        self.refresh_detail_view()
+
+    def onDeleteProcessingResult_(self, _):
+        self._delete_processing_result_for_selected()
+
+    def onContextDeleteProcessingResult_(self, _):
+        self._delete_processing_result_for_selected()
+
     def onContextDelete_(self, _):
         if not self.selected_recording:
             return
@@ -612,6 +637,7 @@ class MainWindowActionsMixin:
                 else:
                     self.ctx_rename_item.setEnabled_(False)
                     self.ctx_archive_item.setEnabled_(False)
+                    self.ctx_delete_processing_result_item.setEnabled_(False)
                     self.ctx_delete_item.setEnabled_(False)
                     return
             except Exception:

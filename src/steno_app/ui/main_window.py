@@ -85,11 +85,17 @@ class MainWindowController(
     def onCopyProtocolRendered_(self, obj):
         return MainWindowActionsMixin.onCopyProtocolRendered_(self, obj)
 
+    def onDeleteProcessingResult_(self, obj):
+        return MainWindowActionsMixin.onDeleteProcessingResult_(self, obj)
+
     def onContextRename_(self, obj):
         return MainWindowActionsMixin.onContextRename_(self, obj)
 
     def onContextArchive_(self, obj):
         return MainWindowActionsMixin.onContextArchive_(self, obj)
+
+    def onContextDeleteProcessingResult_(self, obj):
+        return MainWindowActionsMixin.onContextDeleteProcessingResult_(self, obj)
 
     def onContextDelete_(self, obj):
         return MainWindowActionsMixin.onContextDelete_(self, obj)
