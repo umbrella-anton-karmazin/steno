@@ -4,7 +4,7 @@ from html import escape
 
 import objc
 import rumps
-from AppKit import NSColor, NSFont, NSFontAttributeName
+from AppKit import NSFontAttributeName
 from Foundation import NSIndexSet, NSMutableAttributedString, NSURL
 
 try:
@@ -23,6 +23,7 @@ from steno_app.config import (
     set_selected_prompt_template,
 )
 from steno_app.ui.main_window_view import SidebarRecordingCellView, SidebarRecordingRowView
+from steno_app.ui.design_tokens import css_body_font_family, css_display_font_family, font_body, font_display, font_heading, font_mono
 
 
 class MainWindowStateMixin:
@@ -121,30 +122,23 @@ class MainWindowStateMixin:
 <head>
   <meta charset="utf-8" />
   <style>
-    :root {{ color-scheme: light dark; }}
     :root {{
-      --fg-light: #1f2328;
-      --fg-dark: #e7ebf2;
-      --border-light: rgba(80, 88, 102, 0.28);
-      --border-dark: rgba(171, 185, 207, 0.34);
-      --th-light: rgba(127,127,127,0.12);
-      --th-dark: rgba(157, 171, 196, 0.18);
+      --fg: #282A32;
+      --border: #B4B5B7;
+      --th: #F2F6FF;
     }}
     html, body {{
       margin: 0; padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: {css_body_font_family()};
       font-size: 16px;
       line-height: 1.45;
       background: transparent;
-      color: var(--fg-light);
-    }}
-    @media (prefers-color-scheme: dark) {{
-      html, body {{ color: var(--fg-dark); }}
+      color: var(--fg);
     }}
     .wrap {{ padding: 4px 4px 8px 4px; }}
-    h1 {{ font-size: 1.40em; margin: 0.7em 0 0.25em; }}
-    h2 {{ font-size: 1.20em; margin: 0.7em 0 0.25em; }}
-    h3 {{ font-size: 1.08em; margin: 0.65em 0 0.22em; }}
+    h1 {{ font-family: {css_display_font_family()}; font-size: 2.25em; margin: 0.7em 0 0.25em; line-height: 1.3; }}
+    h2 {{ font-family: {css_body_font_family()}; font-size: 1.3em; margin: 0.7em 0 0.25em; line-height: 1.3; font-weight: 600; }}
+    h3 {{ font-family: {css_body_font_family()}; font-size: 1.0em; margin: 0.65em 0 0.22em; line-height: 1.3; font-weight: 600; }}
     p {{ margin: 0.35em 0; }}
     ul {{ margin: 0.25em 0 0.55em 1.25em; padding: 0; }}
     li {{ margin: 0.2em 0; }}
@@ -156,16 +150,12 @@ class MainWindowStateMixin:
       font-size: 0.95em;
     }}
     th, td {{
-      border: 1px solid var(--border-light);
+      border: 1px solid var(--border);
       padding: 6px 8px;
       text-align: left;
       vertical-align: top;
     }}
-    th {{ background: var(--th-light); font-weight: 600; }}
-    @media (prefers-color-scheme: dark) {{
-      th, td {{ border-color: var(--border-dark); }}
-      th {{ background: var(--th-dark); }}
-    }}
+    th {{ background: var(--th); font-weight: 600; }}
   </style>
 </head>
 <body><div class="wrap">{body}</div></body>
@@ -177,21 +167,16 @@ class MainWindowStateMixin:
         return f"""<!doctype html>
 <html><head><meta charset="utf-8" />
 <style>
-  :root {{ color-scheme: light dark; }}
   :root {{
-    --fg-light: #1f2328;
-    --fg-dark: #e7ebf2;
+    --fg: #282A32;
   }}
   html, body {{
     margin: 0; padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 12px;
+    font-family: {css_body_font_family()};
+    font-size: 14px;
     line-height: 1.45;
     background: transparent;
-    color: var(--fg-light);
-  }}
-  @media (prefers-color-scheme: dark) {{
-    html, body {{ color: var(--fg-dark); }}
+    color: var(--fg);
   }}
   .wrap {{ white-space: pre-wrap; padding: 4px; }}
 </style>
@@ -331,12 +316,12 @@ class MainWindowStateMixin:
         final_text = "\n".join(output_lines)
         attr = NSMutableAttributedString.alloc().initWithString_(final_text)
 
-        base_font = NSFont.systemFontOfSize_(13.0)
-        bold_font = NSFont.boldSystemFontOfSize_(13.0)
-        h1_font = NSFont.boldSystemFontOfSize_(24.0)
-        h2_font = NSFont.boldSystemFontOfSize_(20.0)
-        h3_font = NSFont.boldSystemFontOfSize_(16.0)
-        mono_font = NSFont.userFixedPitchFontOfSize_(12.5) or NSFont.systemFontOfSize_(12.5)
+        base_font = font_body(16.0)
+        bold_font = font_body(16.0, strong=True)
+        h1_font = font_display(36.0)
+        h2_font = font_heading(28.0)
+        h3_font = font_heading(21.0)
+        mono_font = font_mono(13.0)
 
         full_len = len(final_text)
         if full_len > 0:

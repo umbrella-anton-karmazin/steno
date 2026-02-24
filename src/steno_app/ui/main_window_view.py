@@ -2,12 +2,12 @@ import objc
 import rumps
 from AppKit import (
     NSApp,
+    NSAppearance,
     NSBackingStoreBuffered,
     NSBezierPath,
     NSBezelStyleRounded,
     NSButton,
     NSColor,
-    NSFont,
     NSImage,
     NSImageOnly,
     NSMenu,
@@ -41,6 +41,7 @@ from AppKit import (
 )
 
 from steno_app.i18n import tr
+from steno_app.ui.design_tokens import font_body, font_heading, ui_color
 
 try:
     from WebKit import WKWebView
@@ -116,7 +117,7 @@ class SidebarRecordingRowView(NSTableRowView):
             width = max(0.0, bounds[1][0] - (inset_x * 2.0))
             height = max(0.0, bounds[1][1] - (inset_y * 2.0))
             hover_rect = ((inset_x, inset_y), (width, height))
-            fill = NSColor.blackColor().colorWithAlphaComponent_(0.05)
+            fill = ui_color("highlight", alpha=0.45)
             path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(hover_rect, 10.0, 10.0)
             fill.setFill()
             path.fill()
@@ -130,8 +131,8 @@ class SidebarRecordingRowView(NSTableRowView):
         selection_rect = ((inset_x, inset_y), (width, height))
 
         # Matte neutral (non-blue) selection.
-        fill = NSColor.blackColor().colorWithAlphaComponent_(0.095)
-        stroke = NSColor.blackColor().colorWithAlphaComponent_(0.13)
+        fill = ui_color("accent_dark", alpha=0.9)
+        stroke = ui_color("border", alpha=1.0)
 
         path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(selection_rect, 10.0, 10.0)
         fill.setFill()
@@ -152,8 +153,8 @@ class SidebarRecordingCellView(NSTableCellView):
         self.text_label.setDrawsBackground_(False)
         self.text_label.setEditable_(False)
         self.text_label.setSelectable_(False)
-        self.text_label.setFont_(NSFont.systemFontOfSize_(13.0))
-        self.text_label.setTextColor_(NSColor.labelColor())
+        self.text_label.setFont_(font_body(14.0))
+        self.text_label.setTextColor_(ui_color("text_dark"))
         self.text_label.setLineBreakMode_(4)
         self.text_label.setAutoresizingMask_(NSViewWidthSizable)
         self.addSubview_(self.text_label)
@@ -189,7 +190,7 @@ class ModernSidebarButton(NSButton):
         self._style_mode = "primary"
         self.setBordered_(False)
         self.setFocusRingType_(0)
-        self.setFont_(NSFont.systemFontOfSize_(15.0))
+        self.setFont_(font_body(16.0, strong=True))
         self.setWantsLayer_(True)
         self._apply_style()
         return self
@@ -208,7 +209,7 @@ class ModernSidebarButton(NSButton):
             border_alpha = 0.0
             radius = 8.0
             text_alpha = 1.0
-            font_size = 12.0
+            font_size = 14.0
         elif self._style_mode == "icon":
             if self._pressed:
                 bg_alpha = 0.15
@@ -220,8 +221,8 @@ class ModernSidebarButton(NSButton):
                 bg_alpha = 0.08
                 border_alpha = 0.14
             radius = 12.0
-            text_alpha = 0.95
-            font_size = 17.0
+            text_alpha = 1.0
+            font_size = 16.0
         else:
             if self._style_mode == "primary":
                 if self._pressed:
@@ -246,14 +247,22 @@ class ModernSidebarButton(NSButton):
                     bg_alpha = 0.05
                     border_alpha = 0.10
                 text_alpha = 0.98
-                font_size = 15.0
+                font_size = 16.0
             radius = 10.0
-        self.setFont_(NSFont.systemFontOfSize_(font_size))
-        self.setContentTintColor_(NSColor.labelColor().colorWithAlphaComponent_(text_alpha))
+        self.setFont_(font_body(font_size, strong=True))
+        self.setContentTintColor_(ui_color("text_dark", alpha=text_alpha))
         self.layer().setCornerRadius_(radius)
         self.layer().setBorderWidth_(1.0 if border_alpha > 0 else 0.0)
-        self.layer().setBackgroundColor_(NSColor.blackColor().colorWithAlphaComponent_(bg_alpha).CGColor())
-        self.layer().setBorderColor_(NSColor.blackColor().colorWithAlphaComponent_(border_alpha).CGColor())
+        if self._style_mode == "primary":
+            self.layer().setBackgroundColor_(ui_color("brand_blue", alpha=max(0.85, bg_alpha)).CGColor())
+            self.layer().setBorderColor_(ui_color("brand_blue", alpha=max(0.9, border_alpha)).CGColor())
+            self.setContentTintColor_(ui_color("bg_primary"))
+        elif self._style_mode == "icon":
+            self.layer().setBackgroundColor_(ui_color("accent_light", alpha=max(0.8, bg_alpha)).CGColor())
+            self.layer().setBorderColor_(ui_color("border", alpha=max(0.8, border_alpha)).CGColor())
+        else:
+            self.layer().setBackgroundColor_(ui_color("accent_light", alpha=max(0.75, bg_alpha)).CGColor())
+            self.layer().setBorderColor_(ui_color("border", alpha=max(0.75, border_alpha)).CGColor())
 
     def updateTrackingAreas(self):
         if self._tracking_area is not None:
@@ -298,10 +307,13 @@ class MainWindowViewMixin:
         label.setSelectable_(False)
         label.setStringValue_(text)
         if bold:
-            label.setFont_(NSFont.boldSystemFontOfSize_(13.0))
+            label.setFont_(font_heading(14.0))
         elif secondary:
-            label.setFont_(NSFont.systemFontOfSize_(12.0))
-            label.setTextColor_(NSColor.secondaryLabelColor())
+            label.setFont_(font_body(14.0))
+            label.setTextColor_(ui_color("text_dark", alpha=0.72))
+        else:
+            label.setFont_(font_body(16.0))
+            label.setTextColor_(ui_color("text_dark"))
         return label
 
     @objc.python_method
@@ -342,6 +354,10 @@ class MainWindowViewMixin:
         self.window.setTitle_(tr("main.window_title"))
         self.window.setMinSize_((920.0, 560.0))
         self.window.setMovableByWindowBackground_(False)
+        try:
+            self.window.setAppearance_(NSAppearance.appearanceNamed_("NSAppearanceNameAqua"))
+        except Exception:
+            pass
 
         root = self.window.contentView()
         self.sidebar_width = 300.0
@@ -350,37 +366,19 @@ class MainWindowViewMixin:
         self.sidebar_view = NSView.alloc().initWithFrame_(((0.0, 0.0), (self.sidebar_width, root.bounds()[1][1])))
         self.sidebar_view.setAutoresizingMask_(NSViewHeightSizable | NSViewMaxXMargin)
         self.sidebar_view.setWantsLayer_(True)
-        base_bg = NSColor.windowBackgroundColor()
-        # Sidebar: slightly darker than the main content, low contrast.
-        try:
-            sidebar_color = base_bg.blendedColorWithFraction_ofColor_(
-                0.03,
-                NSColor.blackColor(),
-            )
-        except Exception:
-            sidebar_color = base_bg
-        self.sidebar_view.layer().setBackgroundColor_(sidebar_color.CGColor())
+        self.sidebar_view.layer().setBackgroundColor_(ui_color("bg_secondary").CGColor())
         root.addSubview_(self.sidebar_view)
 
         self.content_view = NSView.alloc().initWithFrame_(((self.sidebar_width, 0.0), (root.bounds()[1][0] - self.sidebar_width, root.bounds()[1][1])))
         self.content_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
         self.content_view.setWantsLayer_(True)
-        # Keep main content area in the original color.
-        self.content_view.layer().setBackgroundColor_(NSColor.textBackgroundColor().CGColor())
+        self.content_view.layer().setBackgroundColor_(ui_color("bg_primary").CGColor())
         root.addSubview_(self.content_view)
 
-        # Soften the vertical seam between sidebar and content.
         self.sidebar_seam_view = NSView.alloc().initWithFrame_(((self.sidebar_width - 4.0, 0.0), (8.0, root.bounds()[1][1])))
         self.sidebar_seam_view.setAutoresizingMask_(NSViewHeightSizable | NSViewMinXMargin)
         self.sidebar_seam_view.setWantsLayer_(True)
-        try:
-            seam_color = base_bg.blendedColorWithFraction_ofColor_(
-                0.015,
-                NSColor.blackColor(),
-            )
-        except Exception:
-            seam_color = base_bg
-        self.sidebar_seam_view.layer().setBackgroundColor_(seam_color.CGColor())
+        self.sidebar_seam_view.layer().setBackgroundColor_(ui_color("divider").CGColor())
         root.addSubview_(self.sidebar_seam_view)
 
         self.start_stop_button = self._sidebar_button(
@@ -460,7 +458,7 @@ class MainWindowViewMixin:
             self.settings_button.setImagePosition_(NSImageOnly)
         else:
             self.settings_button.setTitle_("≡")
-            self.settings_button.setFont_(NSFont.systemFontOfSize_(18.0))
+            self.settings_button.setFont_(font_heading(21.0))
         self.sidebar_view.addSubview_(self.settings_button)
 
         self.detail_title_label = self._label(
@@ -468,7 +466,8 @@ class MainWindowViewMixin:
             tr("main.select_recording"),
             bold=True,
         )
-        self.detail_title_label.setFont_(NSFont.boldSystemFontOfSize_(20.0))
+        self.detail_title_label.setFont_(font_heading(28.0))
+        self.detail_title_label.setTextColor_(ui_color("text_dark"))
         self.detail_title_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
         self.content_view.addSubview_(self.detail_title_label)
 
@@ -548,18 +547,18 @@ class MainWindowViewMixin:
             self.prompt_scroll.setWantsLayer_(True)
             self.prompt_scroll.layer().setCornerRadius_(6.0)
             self.prompt_scroll.layer().setBorderWidth_(1.0)
-            self.prompt_scroll.layer().setBorderColor_(NSColor.quaternaryLabelColor().CGColor())
+            self.prompt_scroll.layer().setBorderColor_(ui_color("border").CGColor())
         except Exception:
             pass
         self.prompt_text = PromptTextView.alloc().initWithFrame_(self.prompt_scroll.bounds())
         self.prompt_text.setEditable_(True)
         self.prompt_text.setSelectable_(True)
         self.prompt_text.setRichText_(False)
-        self.prompt_text.setFont_(NSFont.systemFontOfSize_(12.0))
+        self.prompt_text.setFont_(font_body(14.0))
         self.prompt_text.setDrawsBackground_(True)
-        self.prompt_text.setBackgroundColor_(NSColor.textBackgroundColor())
-        self.prompt_text.setTextColor_(NSColor.textColor())
-        self.prompt_text.setInsertionPointColor_(NSColor.textColor())
+        self.prompt_text.setBackgroundColor_(ui_color("bg_primary"))
+        self.prompt_text.setTextColor_(ui_color("text_dark"))
+        self.prompt_text.setInsertionPointColor_(ui_color("text_dark"))
         self.prompt_scroll.setDocumentView_(self.prompt_text)
         self.content_view.addSubview_(self.prompt_scroll)
 
@@ -591,18 +590,18 @@ class MainWindowViewMixin:
             self.user_prompt_scroll.setWantsLayer_(True)
             self.user_prompt_scroll.layer().setCornerRadius_(6.0)
             self.user_prompt_scroll.layer().setBorderWidth_(1.0)
-            self.user_prompt_scroll.layer().setBorderColor_(NSColor.quaternaryLabelColor().CGColor())
+            self.user_prompt_scroll.layer().setBorderColor_(ui_color("border").CGColor())
         except Exception:
             pass
         self.user_prompt_text = PromptTextView.alloc().initWithFrame_(self.user_prompt_scroll.bounds())
         self.user_prompt_text.setEditable_(True)
         self.user_prompt_text.setSelectable_(True)
         self.user_prompt_text.setRichText_(False)
-        self.user_prompt_text.setFont_(NSFont.systemFontOfSize_(12.0))
+        self.user_prompt_text.setFont_(font_body(14.0))
         self.user_prompt_text.setDrawsBackground_(True)
-        self.user_prompt_text.setBackgroundColor_(NSColor.textBackgroundColor())
-        self.user_prompt_text.setTextColor_(NSColor.textColor())
-        self.user_prompt_text.setInsertionPointColor_(NSColor.textColor())
+        self.user_prompt_text.setBackgroundColor_(ui_color("bg_primary"))
+        self.user_prompt_text.setTextColor_(ui_color("text_dark"))
+        self.user_prompt_text.setInsertionPointColor_(ui_color("text_dark"))
         self.user_prompt_scroll.setDocumentView_(self.user_prompt_text)
         self.content_view.addSubview_(self.user_prompt_scroll)
 
@@ -630,10 +629,10 @@ class MainWindowViewMixin:
             self.protocol_text.setEditable_(False)
             self.protocol_text.setSelectable_(True)
             self.protocol_text.setRichText_(True)
-            self.protocol_text.setFont_(NSFont.systemFontOfSize_(13.0))
+            self.protocol_text.setFont_(font_body(16.0))
             self.protocol_text.setDrawsBackground_(True)
-            self.protocol_text.setTextColor_(NSColor.labelColor())
-            self.protocol_text.setBackgroundColor_(NSColor.textBackgroundColor())
+            self.protocol_text.setTextColor_(ui_color("text_dark"))
+            self.protocol_text.setBackgroundColor_(ui_color("bg_primary"))
             self.protocol_scroll.setDocumentView_(self.protocol_text)
             self.content_view.addSubview_(self.protocol_scroll)
 

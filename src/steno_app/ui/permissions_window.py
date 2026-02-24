@@ -6,11 +6,10 @@ import rumps
 from AVFoundation import AVCaptureDevice, AVMediaTypeAudio
 from AppKit import (
     NSApp,
+    NSAppearance,
     NSBackingStoreBuffered,
     NSBezelStyleRounded,
     NSButton,
-    NSColor,
-    NSFont,
     NSTextField,
     NSWindow,
     NSWindowStyleMaskClosable,
@@ -19,6 +18,7 @@ from AppKit import (
 from Foundation import NSObject
 
 from steno_app.i18n import tr
+from steno_app.ui.design_tokens import font_body, font_heading, ui_color
 
 
 logger = logging.getLogger("Steno")
@@ -48,10 +48,14 @@ class PermissionWindowController(NSObject):
         label.setSelectable_(False)
         label.setStringValue_(text)
         if bold:
-            label.setFont_(NSFont.boldSystemFontOfSize_(14.0))
+            label.setFont_(font_heading(21.0))
+            label.setTextColor_(ui_color("text_dark"))
         elif secondary:
-            label.setFont_(NSFont.systemFontOfSize_(12.0))
-            label.setTextColor_(NSColor.secondaryLabelColor())
+            label.setFont_(font_body(14.0))
+            label.setTextColor_(ui_color("text_dark", alpha=0.72))
+        else:
+            label.setFont_(font_body(16.0))
+            label.setTextColor_(ui_color("text_dark"))
         return label
 
     @objc.python_method
@@ -76,11 +80,17 @@ class PermissionWindowController(NSObject):
         self.window.setTitle_(tr("permissions.window_title"))
         self.window.setMinSize_((720.0, 400.0))
         self.window.setMovableByWindowBackground_(False)
+        try:
+            self.window.setAppearance_(NSAppearance.appearanceNamed_("NSAppearanceNameAqua"))
+        except Exception:
+            pass
 
         root = self.window.contentView()
+        root.setWantsLayer_(True)
+        root.layer().setBackgroundColor_(ui_color("bg_primary").CGColor())
 
         title = self._label(((24.0, 360.0), (710.0, 26.0)), tr("permissions.title"), bold=True)
-        title.setFont_(NSFont.boldSystemFontOfSize_(22.0))
+        title.setFont_(font_heading(28.0))
         root.addSubview_(title)
 
         desc = self._label(
@@ -182,12 +192,12 @@ class PermissionWindowController(NSObject):
         self.screen_status.setStringValue_(
             tr("permissions.screen_status", status=tr(screen_status_key))
         )
-        self.screen_status.setTextColor_(NSColor.systemGreenColor() if self.screen_granted else NSColor.systemRedColor())
+        self.screen_status.setTextColor_(ui_color("success") if self.screen_granted else ui_color("error"))
         mic_status_key = "permissions.status.granted" if self.mic_granted else "permissions.status.not_granted"
         self.mic_status.setStringValue_(
             tr("permissions.mic_status", status=tr(mic_status_key))
         )
-        self.mic_status.setTextColor_(NSColor.systemGreenColor() if self.mic_granted else NSColor.systemRedColor())
+        self.mic_status.setTextColor_(ui_color("success") if self.mic_granted else ui_color("error"))
 
         self.screen_button.setEnabled_(not self.screen_granted)
         self.mic_button.setEnabled_(not self.mic_granted)
