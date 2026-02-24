@@ -179,7 +179,7 @@ DEFAULT_CONFIG = {
     "model_name": "gemini-3-flash-preview",
     "prompt": DEFAULT_SYSTEM_PROMPT,
     "save_dir": os.path.expanduser("~/Movies/Steno"),
-    "video_quality": "Medium",
+    "video_quality": "Medium_low_FPS",
     "used_tokens": 0,
     "last_request_tokens": 0,
     "permissions_onboarding_done": False,
@@ -190,6 +190,7 @@ DEFAULT_CONFIG = {
 
 VIDEO_QUALITY_PRESETS = {
     "Low": {"width": 960, "height": 540, "fps": 5, "bitrate": 1000000},
+    "Medium_low_FPS": {"width": 1280, "height": 720, "fps": 1, "bitrate": 3000000},
     "Medium": {"width": 1280, "height": 720, "fps": 10, "bitrate": 3000000},
     "High": {"width": 1920, "height": 1080, "fps": 30, "bitrate": 8000000},
     "Ultra": {"width": 2560, "height": 1440, "fps": 60, "bitrate": 25000000}
