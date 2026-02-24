@@ -491,9 +491,19 @@ class MainWindowViewMixin:
             ((24.0, self.content_view.bounds()[1][1] - 184.0), (380.0, 28.0)),
             False,
         )
+        self.prompt_template_popup.setBordered_(False)
         self.prompt_template_popup.setTarget_(self)
         self.prompt_template_popup.setAction_("onPromptTemplateChanged:")
         self.prompt_template_popup.setAutoresizingMask_(NSViewMaxXMargin | NSViewMinYMargin)
+        try:
+            self.prompt_template_popup.setWantsLayer_(True)
+            self.prompt_template_popup.layer().setCornerRadius_(8.0)
+            self.prompt_template_popup.layer().setBorderWidth_(1.0)
+            self.prompt_template_popup.layer().setBorderColor_(ui_color("border").CGColor())
+            self.prompt_template_popup.layer().setBackgroundColor_(ui_color("bg_secondary").CGColor())
+            self.prompt_template_popup.setContentTintColor_(ui_color("text_dark"))
+        except Exception:
+            pass
         self.content_view.addSubview_(self.prompt_template_popup)
 
         self.process_button = self._sidebar_button(
@@ -542,6 +552,7 @@ class MainWindowViewMixin:
         self.prompt_scroll.setHasHorizontalScroller_(False)
         self.prompt_scroll.setBorderType_(2)
         self.prompt_scroll.setDrawsBackground_(True)
+        self.prompt_scroll.setBackgroundColor_(ui_color("bg_primary"))
         self.prompt_scroll.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
         try:
             self.prompt_scroll.setWantsLayer_(True)
@@ -585,6 +596,7 @@ class MainWindowViewMixin:
         self.user_prompt_scroll.setHasHorizontalScroller_(False)
         self.user_prompt_scroll.setBorderType_(2)
         self.user_prompt_scroll.setDrawsBackground_(True)
+        self.user_prompt_scroll.setBackgroundColor_(ui_color("bg_primary"))
         self.user_prompt_scroll.setAutoresizingMask_(NSViewWidthSizable | NSViewMinYMargin)
         try:
             self.user_prompt_scroll.setWantsLayer_(True)
@@ -617,6 +629,24 @@ class MainWindowViewMixin:
         if HAS_WEBKIT:
             self.protocol_web_view = WKWebView.alloc().initWithFrame_(protocol_frame)
             self.protocol_web_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+            try:
+                self.protocol_web_view.setWantsLayer_(True)
+                self.protocol_web_view.layer().setBackgroundColor_(ui_color("bg_primary").CGColor())
+            except Exception:
+                pass
+            try:
+                self.protocol_web_view.setValue_forKey_(False, "drawsBackground")
+            except Exception:
+                pass
+            try:
+                self.protocol_web_view.setOpaque_(False)
+            except Exception:
+                pass
+            try:
+                self.protocol_web_view.scrollView().setDrawsBackground_(False)
+                self.protocol_web_view.scrollView().setBackgroundColor_(ui_color("bg_primary"))
+            except Exception:
+                pass
             self.protocol_scroll = self.protocol_web_view
             self.protocol_text = None
             self.content_view.addSubview_(self.protocol_web_view)

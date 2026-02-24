@@ -23,7 +23,7 @@ from steno_app.config import (
     set_selected_prompt_template,
 )
 from steno_app.ui.main_window_view import SidebarRecordingCellView, SidebarRecordingRowView
-from steno_app.ui.design_tokens import css_body_font_family, css_display_font_family, font_body, font_display, font_heading, font_mono
+from steno_app.ui.design_tokens import color_hex, css_body_font_family, css_display_font_family, font_body, font_display, font_heading, font_mono
 
 
 class MainWindowStateMixin:
@@ -126,13 +126,14 @@ class MainWindowStateMixin:
       --fg: #282A32;
       --border: #B4B5B7;
       --th: #F2F6FF;
+      --bg: {color_hex("bg_primary")};
     }}
     html, body {{
       margin: 0; padding: 0;
       font-family: {css_body_font_family()};
       font-size: 16px;
       line-height: 1.45;
-      background: transparent;
+      background: var(--bg);
       color: var(--fg);
     }}
     .wrap {{ padding: 4px 4px 8px 4px; }}
@@ -169,13 +170,14 @@ class MainWindowStateMixin:
 <style>
   :root {{
     --fg: #282A32;
+    --bg: {color_hex("bg_primary")};
   }}
   html, body {{
     margin: 0; padding: 0;
     font-family: {css_body_font_family()};
     font-size: 14px;
     line-height: 1.45;
-    background: transparent;
+    background: var(--bg);
     color: var(--fg);
   }}
   .wrap {{ white-space: pre-wrap; padding: 4px; }}

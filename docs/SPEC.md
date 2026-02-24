@@ -40,6 +40,7 @@ Steno — desktop-приложение для macOS (PyObjC + rumps), котор
 - `src/steno_app/ui/main_window_state.py`
 - `src/steno_app/ui/main_window_actions.py`
 - `src/steno_app/ui/menu_delegate.py`
+- `src/steno_app/ui/design_tokens.py` (UI kit tokens: colors + typography + CSS font families)
 
 ### 3.4 Конфиг и локализация
 - `src/steno_app/config.py`
@@ -62,6 +63,10 @@ Steno — desktop-приложение для macOS (PyObjC + rumps), котор
 - Двухпанельный layout:
   - sidebar фиксированной ширины;
   - адаптивная контентная область.
+- Визуальная система переведена на единые токены UI kit:
+  - светлая палитра (brand/neutral/state colors);
+  - типографика с приоритетом `ALS Sector` (display) и `Graphik LC` (heading/body) с fallback на системные шрифты.
+- Для окна принудительно используется светлый appearance (`NSAppearanceNameAqua`), dark-mode ветки из HTML/CSS рендера протокола не используются.
 - Sidebar:
   - кнопка Start/Stop;
   - кнопка Import Meeting;
@@ -138,6 +143,10 @@ Steno — desktop-приложение для macOS (PyObjC + rumps), котор
   - Rename (переименование связанных файлов);
   - Archive (скрыть из списка, файлы оставить);
   - Delete (удалить встречу и связанные файлы).
+- Для действия удаления результата обработки в основном UI используется короткий label:
+  - RU: `Очистить`
+  - EN: `Clear`
+  (тексты confirm popup для этого действия оставлены без изменений).
 - Связанные артефакты включают:
   - `.mp4`
   - `_mic.m4a`

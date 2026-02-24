@@ -40,8 +40,8 @@ def _color_from_hex(hex_value, alpha=1.0):
 COLORS = {
     "brand_blue": "#0050FF",
     "text_dark": "#282A32",
-    "bg_primary": "#FFFFFF",
-    "bg_secondary": "#F7F7F7",
+    "bg_primary": "#F2F3F5",
+    "bg_secondary": "#E9EBEF",
     "highlight": "#DADADA",
     "divider": "#CCCCCE",
     "border": "#B4B5B7",
@@ -55,6 +55,10 @@ COLORS = {
 
 def ui_color(token, alpha=1.0):
     return _color_from_hex(COLORS.get(token, "#000000"), alpha=alpha)
+
+
+def color_hex(token, default="#000000"):
+    return COLORS.get(token, default)
 
 
 def _font(candidates, size, fallback_bold=False):
