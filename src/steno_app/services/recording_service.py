@@ -5,9 +5,6 @@ import time
 from datetime import datetime
 
 import rumps
-from Foundation import NSURL
-
-from steno_app.recorder import ScreenRecorder
 from steno_app.config import ConfigManager, VIDEO_QUALITY_PRESETS
 from steno_app.i18n import tr
 
@@ -19,6 +16,28 @@ class RecordingService:
     def __init__(self, app, has_pyobjc):
         self.app = app
         self.has_pyobjc = bool(has_pyobjc)
+        self._native_recording_ready = None
+        self._screen_recorder_cls = None
+        self._nsurl_cls = None
+        self._native_recording_error = None
+
+    def _ensure_native_recording_modules(self):
+        if self._native_recording_ready is not None:
+            return self._native_recording_ready
+        try:
+            from Foundation import NSURL  # pylint: disable=import-outside-toplevel
+            from steno_app.recorder import ScreenRecorder  # pylint: disable=import-outside-toplevel
+        except Exception as exc:
+            logger.exception("Native recording modules are unavailable: %s", exc)
+            self._native_recording_error = str(exc)
+            self._native_recording_ready = False
+            return False
+
+        self._nsurl_cls = NSURL
+        self._screen_recorder_cls = ScreenRecorder
+        self._native_recording_error = None
+        self._native_recording_ready = True
+        return True
 
     def record_switch(self, sender):
         if self.has_pyobjc and not self.app.config.get("permissions_onboarding_done", False):
@@ -46,6 +65,14 @@ class RecordingService:
         # Do not request permissions here.
         # Permissions are handled explicitly in onboarding window.
         if self.has_pyobjc:
+            if not self._ensure_native_recording_modules():
+                rumps.alert(
+                    tr("record.recording_error_title"),
+                    tr("record.recording_error_body", error=self._native_recording_error or tr("common.error")),
+                )
+                self.app.set_state_icon("error")
+                self.app.request_ui_refresh()
+                return
             if (
                 not self.app.permission_manager.safe_is_mic_authorized(timeout_sec=1.5, default=False)
                 or not self.app.permission_manager.safe_is_screen_authorized(timeout_sec=1.5, default=False)
@@ -75,15 +102,15 @@ class RecordingService:
             self.app.set_state_icon("awaiting_permission")
             self.app.request_ui_refresh()
 
-            url_main = NSURL.fileURLWithPath_(self.app.current_filename)
-            url_mic = NSURL.fileURLWithPath_(self.app.mic_audio_filename)
+            url_main = self._nsurl_cls.fileURLWithPath_(self.app.current_filename)
+            url_mic = self._nsurl_cls.fileURLWithPath_(self.app.mic_audio_filename)
 
             # Получаем настройки качества
             quality_key = self.app.config.get("video_quality", "Medium")
             preset = VIDEO_QUALITY_PRESETS.get(quality_key, VIDEO_QUALITY_PRESETS["Medium"])
 
             # ВАЖНО: Инициализация рекордера с двумя URL и конфигом
-            self.app.recorder = ScreenRecorder.alloc().initWithOutputURLs_auxURL_videoConfig_(
+            self.app.recorder = self._screen_recorder_cls.alloc().initWithOutputURLs_auxURL_videoConfig_(
                 url_main, url_mic, preset
             )
 

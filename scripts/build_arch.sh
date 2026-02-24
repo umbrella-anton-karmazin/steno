@@ -14,7 +14,7 @@ else
 fi
 ARCH="${1:-arm64}"
 HOST_ARCH="$(uname -m)"
-REQUIRED_PY_PACKAGES="rumps google-genai certifi py2app pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-AVFoundation pyobjc-framework-Quartz pyobjc-framework-ApplicationServices"
+REQUIRED_PY_PACKAGES="rumps google-genai certifi py2app pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-AVFoundation pyobjc-framework-Quartz pyobjc-framework-ApplicationServices pyobjc-framework-ScreenCaptureKit"
 
 case "$ARCH" in
   arm64|x86_64)
@@ -61,6 +61,11 @@ if [ -n "$FFMPEG_SOURCE" ]; then
   fi
   cp -f "$FFMPEG_SOURCE" bin/ffmpeg
   chmod +x bin/ffmpeg
+  if ! file bin/ffmpeg | grep -q "$ARCH"; then
+    echo "Ошибка: bin/ffmpeg имеет неверную архитектуру для сборки $ARCH"
+    file bin/ffmpeg
+    exit 1
+  fi
   echo "Используем ffmpeg: $FFMPEG_SOURCE"
 fi
 

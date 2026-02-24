@@ -42,7 +42,7 @@ OPTIONS = {
         'NSMicrophoneUsageDescription': "Приложение записывает звук микрофона во время встреч.",
         'NSScreenCaptureUsageDescription': "Приложение записывает экран для сохранения видео встреч.",
     },
-    'packages': ['rumps', 'certifi', 'objc', 'AVFoundation', 'Quartz', 'ApplicationServices', 'AppKit', 'Foundation', 'steno_app', 'steno_app.ui', 'steno_app.services'],
+    'packages': ['rumps', 'certifi', 'objc', 'AVFoundation', 'Quartz', 'ScreenCaptureKit', 'ApplicationServices', 'AppKit', 'Foundation', 'steno_app', 'steno_app.ui', 'steno_app.services'],
     'includes': ['google.genai'],
     'iconfile': 'src/steno_app/assets/app_icon.icns.icns',
 }
