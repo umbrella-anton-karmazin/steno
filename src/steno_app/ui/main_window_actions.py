@@ -362,6 +362,20 @@ class MainWindowActionsMixin:
         audio_item.setSubmenu_(audio_submenu)
         menu.addItem_(audio_item)
 
+        cleanup_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("main.cleanup"), None, "")
+        cleanup_submenu = NSMenu.alloc().initWithTitle_(tr("main.cleanup"))
+        for days in (7, 30, 90):
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                tr("main.cleanup_older_than_days", days=days),
+                "onCleanupOlderThan:",
+                "",
+            )
+            item.setTarget_(self)
+            item.setRepresentedObject_(str(days))
+            cleanup_submenu.addItem_(item)
+        cleanup_item.setSubmenu_(cleanup_submenu)
+        menu.addItem_(cleanup_item)
+
         templates_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("main.prompt_templates_manage"), None, "")
         templates_submenu = NSMenu.alloc().initWithTitle_(tr("main.prompt_templates_manage"))
         selected_template = get_selected_prompt_template(self.app.config) or {}
@@ -476,6 +490,28 @@ class MainWindowActionsMixin:
                 device_name = str(item.get("name") or "")
                 break
         self.app.set_audio_input_value(selected, device_name)
+
+    def onCleanupFiles_(self, sender):
+        menu = NSMenu.alloc().initWithTitle_(tr("main.cleanup"))
+        for days in (7, 30, 90):
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                tr("main.cleanup_older_than_days", days=days),
+                "onCleanupOlderThan:",
+                "",
+            )
+            item.setTarget_(self)
+            item.setRepresentedObject_(str(days))
+            menu.addItem_(item)
+        NSMenu.popUpContextMenu_withEvent_forView_(menu, NSApp().currentEvent(), sender)
+
+    def onCleanupOlderThan_(self, sender):
+        try:
+            days = int(str(sender.representedObject() or "0"))
+        except Exception:
+            days = 0
+        if days <= 0:
+            return
+        self.app.meetings_service.cleanup_older_than_interactive(days)
 
     def onSelectPromptTemplate_(self, sender):
         template_id = str(sender.representedObject() or "")

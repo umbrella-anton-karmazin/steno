@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import threading
+import time
 
 import rumps
 
@@ -86,6 +87,179 @@ class MeetingsService:
             "protocol": os.path.join(save_dir, base + "_protocol.txt"),
             "protocol_meta": os.path.join(save_dir, base + "_protocol.meta.json"),
         }
+
+    def _recording_total_size_bytes(self, filename):
+        total = 0
+        for path in self._paths_for_recording(filename).values():
+            if not os.path.exists(path):
+                continue
+            try:
+                total += int(os.path.getsize(path))
+            except Exception:
+                pass
+        return total
+
+    def _format_bytes(self, value):
+        size = max(0.0, float(value or 0))
+        units = ["B", "KB", "MB", "GB", "TB"]
+        idx = 0
+        while size >= 1024.0 and idx < len(units) - 1:
+            size /= 1024.0
+            idx += 1
+        if idx == 0:
+            return f"{int(size)} {units[idx]}"
+        return f"{size:.1f} {units[idx]}"
+
+    def get_library_storage_usage_bytes(self):
+        save_dir = self.app.config["save_dir"]
+        if not os.path.isdir(save_dir):
+            return 0
+        total = 0
+        try:
+            for entry in os.listdir(save_dir):
+                path = os.path.join(save_dir, entry)
+                if not os.path.isfile(path):
+                    continue
+                try:
+                    total += int(os.path.getsize(path))
+                except Exception:
+                    pass
+        except Exception:
+            return 0
+        return total
+
+    def get_library_storage_usage_human(self):
+        return self._format_bytes(self.get_library_storage_usage_bytes())
+
+    def _collect_cleanup_candidates_older_than(self, older_than_days):
+        save_dir = self.app.config["save_dir"]
+        if not os.path.isdir(save_dir):
+            return []
+        try:
+            days = int(older_than_days)
+        except Exception:
+            days = 0
+        if days <= 0:
+            return []
+
+        cutoff_ts = (time.time() - (days * 24 * 3600))
+        active_recording_name = os.path.basename(self.app.current_filename) if self.app.current_filename else ""
+        processing_name = str(self.app.current_processing_file or "")
+
+        candidates = []
+        for filename in os.listdir(save_dir):
+            if not self._is_primary_meeting_media(filename):
+                continue
+            if filename == active_recording_name or filename == processing_name:
+                continue
+            path = os.path.join(save_dir, filename)
+            try:
+                mtime = float(os.path.getmtime(path))
+            except Exception:
+                continue
+            if mtime > cutoff_ts:
+                continue
+            candidates.append(filename)
+        return candidates
+
+    def estimate_cleanup_older_than(self, older_than_days):
+        candidates = self._collect_cleanup_candidates_older_than(older_than_days)
+        total_bytes = 0
+        for filename in candidates:
+            total_bytes += self._recording_total_size_bytes(filename)
+        return {
+            "count": len(candidates),
+            "bytes": total_bytes,
+            "bytes_human": self._format_bytes(total_bytes),
+            "filenames": candidates,
+        }
+
+    def cleanup_older_than_interactive(self, older_than_days):
+        estimate = self.estimate_cleanup_older_than(older_than_days)
+        count = int(estimate.get("count") or 0)
+        if count <= 0:
+            rumps.notification(tr("cleanup.title"), tr("cleanup.nothing_body"), "")
+            return False
+
+        confirmed = False
+        if self.has_pyobjc and NSAlert is not None:
+            alert = NSAlert.alloc().init()
+            alert.setMessageText_(tr("cleanup.confirm_title"))
+            alert.setInformativeText_(
+                tr(
+                    "cleanup.confirm_body",
+                    days=int(older_than_days),
+                    count=count,
+                    size=str(estimate.get("bytes_human") or "0 B"),
+                )
+            )
+            try:
+                alert.setAlertStyle_(NSAlertStyleWarning)
+            except Exception:
+                pass
+            alert.addButtonWithTitle_(tr("cleanup.confirm_button"))
+            alert.addButtonWithTitle_(tr("common.cancel"))
+            confirmed = (alert.runModal() == 1000)
+        else:
+            confirmed = bool(
+                rumps.alert(
+                    tr("cleanup.confirm_title"),
+                    tr(
+                        "cleanup.confirm_fallback_body",
+                        days=int(older_than_days),
+                        count=count,
+                        size=str(estimate.get("bytes_human") or "0 B"),
+                    ),
+                )
+            )
+        if not confirmed:
+            return False
+
+        removed_count = 0
+        removed_bytes = 0
+        failed = []
+        for filename in estimate.get("filenames") or []:
+            if self._is_recording_locked_for_edit(filename):
+                failed.append(filename)
+                continue
+            paths = self._paths_for_recording(filename)
+            file_failed = False
+            removed_any = False
+            removed_size_this = 0
+            for path in paths.values():
+                if not os.path.exists(path):
+                    continue
+                try:
+                    removed_size_this += int(os.path.getsize(path))
+                except Exception:
+                    pass
+                try:
+                    os.remove(path)
+                    removed_any = True
+                except Exception:
+                    file_failed = True
+            if removed_any:
+                removed_count += 1
+                removed_bytes += removed_size_this
+                self._unhide_recording_entry(filename)
+                imported = self._get_imported_recordings()
+                if filename in imported:
+                    imported.remove(filename)
+                    self._set_imported_recordings(imported)
+            if file_failed:
+                failed.append(filename)
+
+        if removed_count > 0:
+            rumps.notification(
+                tr("cleanup.done_title"),
+                tr("cleanup.done_body", count=removed_count, size=self._format_bytes(removed_bytes)),
+                "",
+            )
+        if failed:
+            rumps.alert(tr("cleanup.error_title"), "\n".join(failed[:12]))
+
+        self.app.request_ui_refresh()
+        return removed_count > 0 and not failed
 
     def _get_hidden_recordings(self):
         raw = self.app.config.get("hidden_recordings", [])

@@ -689,6 +689,20 @@ class MainWindowStateMixin:
             self.import_button.setTitle_(tr("main.import_meeting"))
             self.import_button.setEnabled_(True)
 
+        cleanup_locked = bool(self.app.is_recording or self.app.is_processing or self.app.is_waiting_permissions)
+        try:
+            self.cleanup_button.setEnabled_(not cleanup_locked)
+        except Exception:
+            pass
+        try:
+            usage = self.app.meetings_service.get_library_storage_usage_human()
+        except Exception:
+            usage = "0 B"
+        try:
+            self.storage_usage_label.setStringValue_(tr("main.storage_usage", size=usage))
+        except Exception:
+            pass
+
     @objc.python_method
     def refresh_file_lists(self):
         self.recording_files = self.app.meetings_service.list_recent_recordings(limit=200)

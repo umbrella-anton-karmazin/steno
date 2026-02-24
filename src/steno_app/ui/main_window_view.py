@@ -461,6 +461,40 @@ class MainWindowViewMixin:
             self.settings_button.setFont_(font_heading(21.0))
         self.sidebar_view.addSubview_(self.settings_button)
 
+        self.cleanup_button = self._sidebar_button(
+            ((self.sidebar_pad_x + 50.0, 30.0), (40.0, 40.0)),
+            "",
+            "onCleanupFiles:",
+            mode="icon",
+        )
+        self.cleanup_button.setAutoresizingMask_(NSViewMaxXMargin | NSViewMaxYMargin)
+        try:
+            cleanup_icon = NSImage.imageWithSystemSymbolName_accessibilityDescription_(
+                "trash",
+                None,
+            )
+        except Exception:
+            cleanup_icon = None
+        if cleanup_icon is not None:
+            try:
+                cleanup_icon.setTemplate_(True)
+            except Exception:
+                pass
+            self.cleanup_button.setImage_(cleanup_icon)
+            self.cleanup_button.setImagePosition_(NSImageOnly)
+        else:
+            self.cleanup_button.setTitle_("⌫")
+            self.cleanup_button.setFont_(font_heading(21.0))
+        self.sidebar_view.addSubview_(self.cleanup_button)
+
+        self.storage_usage_label = self._label(
+            ((self.sidebar_pad_x + 98.0, 40.0), (self.sidebar_inner_width - 98.0, 20.0)),
+            tr("main.storage_usage", size="0 B"),
+            secondary=True,
+        )
+        self.storage_usage_label.setAutoresizingMask_(NSViewWidthSizable | NSViewMaxYMargin)
+        self.sidebar_view.addSubview_(self.storage_usage_label)
+
         self.detail_title_label = self._label(
             ((24.0, self.content_view.bounds()[1][1] - 52.0), (760.0, 28.0)),
             tr("main.select_recording"),

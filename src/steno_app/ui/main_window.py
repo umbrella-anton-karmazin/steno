@@ -103,6 +103,9 @@ class MainWindowController(
     def onOpenSettings_(self, obj):
         return MainWindowActionsMixin.onOpenSettings_(self, obj)
 
+    def onCleanupFiles_(self, obj):
+        return MainWindowActionsMixin.onCleanupFiles_(self, obj)
+
     def onSelectQuality_(self, obj):
         return MainWindowActionsMixin.onSelectQuality_(self, obj)
 
@@ -111,6 +114,9 @@ class MainWindowController(
 
     def onSelectAudioInput_(self, obj):
         return MainWindowActionsMixin.onSelectAudioInput_(self, obj)
+
+    def onCleanupOlderThan_(self, obj):
+        return MainWindowActionsMixin.onCleanupOlderThan_(self, obj)
 
     def onSelectPromptTemplate_(self, obj):
         return MainWindowActionsMixin.onSelectPromptTemplate_(self, obj)
