@@ -649,6 +649,7 @@ class RecorderApp(rumps.App):
             # Backward compatibility for older call-sites.
             if system_prompt_override is None and prompt_override is not None:
                 system_prompt_override = prompt_override
+            ai_source_paths = self.meetings_service.get_ai_source_paths_for_recording(filename)
             self.current_processing_file = filename
             threading.Thread(
                 target=process_video_with_ai,
@@ -659,6 +660,7 @@ class RecorderApp(rumps.App):
                     system_prompt_override,
                     user_prompt_override,
                     template_id_override,
+                    ai_source_paths,
                 ),
                 daemon=True
             ).start()

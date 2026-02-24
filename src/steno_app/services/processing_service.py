@@ -168,6 +168,7 @@ def build_generation_prompts(video_path, config, system_prompt_text=None, user_p
 def build_protocol_metadata(
     video_path,
     mic_audio_path,
+    extra_source_paths,
     txt_path,
     config,
     template_id,
@@ -192,6 +193,10 @@ def build_protocol_metadata(
     sources = [os.path.basename(video_path)]
     if mic_audio_path and os.path.exists(mic_audio_path):
         sources.append(os.path.basename(mic_audio_path))
+    for extra in extra_source_paths or []:
+        extra_name = os.path.basename(str(extra or ""))
+        if extra_name and extra_name not in sources:
+            sources.append(extra_name)
 
     return {
         "schema_version": 1,
@@ -231,6 +236,7 @@ def process_video_with_ai(
     system_prompt_override=None,
     user_prompt_override=None,
     template_id_override=None,
+    extra_source_paths=None,
 ):
     temp_files_to_cleanup = []
     try:
@@ -255,20 +261,31 @@ def process_video_with_ai(
                 app_instance.request_set_state_icon("idle")
             return
 
-        # 1. Определяем файлы для загрузки
-        # Основное видео + микрофон (MP4)
-        files_to_upload_paths = [video_path]
-
-        # Ищем файл микрофона (M4A)
-        # Он должен лежать рядом с именем: имя_файла_mic.m4a
+        # 1. Определяем файлы для загрузки.
         base_name = os.path.splitext(video_path)[0]
         mic_audio_path = base_name + "_mic.m4a"
+        files_to_upload_paths = []
+        seen_paths = set()
 
-        if os.path.exists(mic_audio_path):
-            logger.info(f"Found microphone audio track: {mic_audio_path}")
-            files_to_upload_paths.append(mic_audio_path)
-        else:
-            logger.warning("Microphone audio file not found, processing video only.")
+        def add_upload_path(path):
+            p = str(path or "")
+            if not p or not os.path.exists(p):
+                return
+            if p in seen_paths:
+                return
+            seen_paths.add(p)
+            files_to_upload_paths.append(p)
+
+        for path in extra_source_paths or []:
+            add_upload_path(path)
+
+        if not files_to_upload_paths:
+            add_upload_path(video_path)
+            if os.path.exists(mic_audio_path):
+                logger.info(f"Found microphone audio track: {mic_audio_path}")
+                add_upload_path(mic_audio_path)
+            else:
+                logger.warning("Microphone audio file not found, processing video only.")
 
         # 2. Инициализация клиента
         client_kwargs = {"api_key": api_key}
@@ -385,6 +402,7 @@ def process_video_with_ai(
         metadata = build_protocol_metadata(
             video_path=video_path,
             mic_audio_path=mic_audio_path,
+            extra_source_paths=files_to_upload_paths,
             txt_path=txt_path,
             config=config,
             template_id=template_id,

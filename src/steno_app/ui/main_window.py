@@ -106,6 +106,9 @@ class MainWindowController(
     def onCleanupFiles_(self, obj):
         return MainWindowActionsMixin.onCleanupFiles_(self, obj)
 
+    def onCleanupAll_(self, obj):
+        return MainWindowActionsMixin.onCleanupAll_(self, obj)
+
     def onSelectQuality_(self, obj):
         return MainWindowActionsMixin.onSelectQuality_(self, obj)
 

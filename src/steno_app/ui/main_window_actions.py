@@ -69,7 +69,7 @@ class MainWindowActionsMixin:
         panel = NSOpenPanel.openPanel()
         panel.setCanChooseFiles_(True)
         panel.setCanChooseDirectories_(False)
-        panel.setAllowsMultipleSelection_(False)
+        panel.setAllowsMultipleSelection_(True)
         panel.setAllowedFileTypes_(
             [
                 "mp4",
@@ -84,6 +84,8 @@ class MainWindowActionsMixin:
                 "aac",
                 "flac",
                 "ogg",
+                "txt",
+                "json",
             ]
         )
         response = panel.runModal()
@@ -91,17 +93,19 @@ class MainWindowActionsMixin:
             return
 
         try:
-            src_path = str(panel.URL().path() or "")
+            urls = panel.URLs() or []
+            src_paths = [str(url.path() or "") for url in urls]
         except Exception:
-            src_path = ""
-        if not src_path:
+            src_paths = []
+        src_paths = [path for path in src_paths if path]
+        if not src_paths:
             return
 
         def on_done(imported_name):
             if imported_name:
                 self.focus_recording(imported_name)
 
-        self.app.meetings_service.import_external_meeting_file_async(src_path, on_done=on_done)
+        self.app.meetings_service.import_external_meeting_files_async(src_paths, on_done=on_done)
 
     def onProcessSelected_(self, _):
         if not self.selected_recording:
@@ -493,6 +497,14 @@ class MainWindowActionsMixin:
 
     def onCleanupFiles_(self, sender):
         menu = NSMenu.alloc().initWithTitle_(tr("main.cleanup"))
+        delete_all_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            tr("main.cleanup_all"),
+            "onCleanupAll:",
+            "",
+        )
+        delete_all_item.setTarget_(self)
+        menu.addItem_(delete_all_item)
+        menu.addItem_(NSMenuItem.separatorItem())
         for days in (7, 30, 90):
             item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
                 tr("main.cleanup_older_than_days", days=days),
@@ -503,6 +515,9 @@ class MainWindowActionsMixin:
             item.setRepresentedObject_(str(days))
             menu.addItem_(item)
         NSMenu.popUpContextMenu_withEvent_forView_(menu, NSApp().currentEvent(), sender)
+
+    def onCleanupAll_(self, _):
+        self.app.meetings_service.cleanup_all_interactive()
 
     def onCleanupOlderThan_(self, sender):
         try:

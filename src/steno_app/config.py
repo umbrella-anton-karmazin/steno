@@ -185,6 +185,7 @@ DEFAULT_CONFIG = {
     "permissions_onboarding_done": False,
     "hidden_recordings": [],
     "imported_recordings": [],
+    "imported_recording_files": {},
     "prompt_templates": _make_default_prompt_templates(DEFAULT_SYSTEM_PROMPT),
 }
 

@@ -781,6 +781,10 @@ class MainWindowStateMixin:
         files_text = tr("main.files_line", video=video_name, audio=audio_label)
         if self.app.meetings_service.is_imported_recording(video_name):
             files_text += "\n" + tr("main.source_imported")
+            ai_source_paths = self.app.meetings_service.get_ai_source_paths_for_recording(video_name)
+            ai_source_names = [os.path.basename(path) for path in ai_source_paths if path]
+            if ai_source_names:
+                files_text += "\n" + tr("main.ai_source_files_line", files=", ".join(ai_source_names))
         if status == "recording" and self._is_recording_file(video_name):
             duration_seconds = self.app.get_live_recording_elapsed_seconds()
         else:
