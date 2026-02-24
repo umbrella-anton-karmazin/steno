@@ -43,6 +43,7 @@ class ScreenRecorder(NSObject):
         self.height = int(config.get("height", 720))
         self.fps = int(config.get("fps", 10))
         self.bitrate = int(config.get("bitrate", 3000000))
+        self.audio_input_uid = str(config.get("audio_input_uid") or "").strip()
         
         # --- WRITER 1: Main (Video + System Audio) ---
         self.main_writer = None
@@ -168,9 +169,32 @@ class ScreenRecorder(NSObject):
         
         # --- Микрофон (AVCapture) ---
         self.mic_session = AVCaptureSession.alloc().init()
-        mic_device = AVCaptureDevice.defaultDeviceWithMediaType_(AVMediaTypeAudio)
+        mic_device = None
+        if self.audio_input_uid:
+            try:
+                devices = AVCaptureDevice.devicesWithMediaType_(AVMediaTypeAudio) or []
+            except Exception:
+                devices = []
+            for device in devices:
+                try:
+                    if str(device.uniqueID() or "") == self.audio_input_uid:
+                        mic_device = device
+                        break
+                except Exception:
+                    continue
+            if mic_device is None:
+                logger.warning(
+                    "Configured mic UID is unavailable, fallback to system default: %s",
+                    self.audio_input_uid,
+                )
+        if mic_device is None:
+            mic_device = AVCaptureDevice.defaultDeviceWithMediaType_(AVMediaTypeAudio)
         
         if mic_device:
+            try:
+                logger.info("Mic source: %s [%s]", mic_device.localizedName(), mic_device.uniqueID())
+            except Exception:
+                pass
             mic_inp, err = AVCaptureDeviceInput.deviceInputWithDevice_error_(mic_device, None)
             if not err and self.mic_session.canAddInput_(mic_inp):
                 self.mic_session.addInput_(mic_inp)

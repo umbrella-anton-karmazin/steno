@@ -180,6 +180,8 @@ DEFAULT_CONFIG = {
     "prompt": DEFAULT_SYSTEM_PROMPT,
     "save_dir": os.path.expanduser("~/Movies/Steno"),
     "video_quality": "Medium_low_FPS",
+    "audio_input_uid": "",
+    "audio_input_name": "",
     "used_tokens": 0,
     "last_request_tokens": 0,
     "permissions_onboarding_done": False,

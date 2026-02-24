@@ -109,6 +109,9 @@ class MainWindowController(
     def onSelectModel_(self, obj):
         return MainWindowActionsMixin.onSelectModel_(self, obj)
 
+    def onSelectAudioInput_(self, obj):
+        return MainWindowActionsMixin.onSelectAudioInput_(self, obj)
+
     def onSelectPromptTemplate_(self, obj):
         return MainWindowActionsMixin.onSelectPromptTemplate_(self, obj)
 

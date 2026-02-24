@@ -492,6 +492,25 @@ class RecorderApp(rumps.App):
         if self.window_controller:
             self.window_controller.refresh_all()
 
+    def list_audio_input_devices(self):
+        try:
+            return self.recording_service.list_audio_input_devices()
+        except Exception:
+            return []
+
+    def set_audio_input_value(self, uid, name=""):
+        value_uid = str(uid or "").strip()
+        value_name = str(name or "").strip()
+        if value_uid:
+            self.config["audio_input_uid"] = value_uid
+            self.config["audio_input_name"] = value_name
+        else:
+            self.config["audio_input_uid"] = ""
+            self.config["audio_input_name"] = ""
+        ConfigManager.save(self.config)
+        if self.window_controller:
+            self.window_controller.refresh_all()
+
     def set_ai_model_value(self, model_name):
         if model_name not in AI_MODELS:
             return

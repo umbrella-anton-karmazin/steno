@@ -321,6 +321,47 @@ class MainWindowActionsMixin:
         model_item.setSubmenu_(model_submenu)
         menu.addItem_(model_item)
 
+        audio_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("main.audio_input"), None, "")
+        audio_submenu = NSMenu.alloc().initWithTitle_(tr("main.audio_input"))
+        selected_uid = str(self.app.config.get("audio_input_uid") or "").strip()
+
+        auto_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("main.audio_input_auto"), "onSelectAudioInput:", "")
+        auto_item.setTarget_(self)
+        auto_item.setRepresentedObject_("__auto__")
+        auto_item.setState_(1 if not selected_uid else 0)
+        audio_submenu.addItem_(auto_item)
+
+        devices = self.app.list_audio_input_devices()
+        if devices:
+            audio_submenu.addItem_(NSMenuItem.separatorItem())
+        found_selected = False
+        for device in devices:
+            device_uid = str(device.get("uid") or "").strip()
+            device_name = str(device.get("name") or device_uid)
+            connected = bool(device.get("connected", True))
+            title = device_name if connected else f"{device_name} ({tr('main.audio_input_unavailable')})"
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, "onSelectAudioInput:", "")
+            item.setTarget_(self)
+            item.setRepresentedObject_(device_uid)
+            is_selected = bool(selected_uid and device_uid == selected_uid)
+            if is_selected:
+                found_selected = True
+            item.setState_(1 if is_selected else 0)
+            item.setEnabled_(connected)
+            audio_submenu.addItem_(item)
+
+        if selected_uid and not found_selected:
+            audio_submenu.addItem_(NSMenuItem.separatorItem())
+            stale_name = str(self.app.config.get("audio_input_name") or selected_uid)
+            stale_title = f"{stale_name} ({tr('main.audio_input_unavailable')})"
+            stale_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(stale_title, None, "")
+            stale_item.setState_(1)
+            stale_item.setEnabled_(False)
+            audio_submenu.addItem_(stale_item)
+
+        audio_item.setSubmenu_(audio_submenu)
+        menu.addItem_(audio_item)
+
         templates_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(tr("main.prompt_templates_manage"), None, "")
         templates_submenu = NSMenu.alloc().initWithTitle_(tr("main.prompt_templates_manage"))
         selected_template = get_selected_prompt_template(self.app.config) or {}
@@ -420,6 +461,21 @@ class MainWindowActionsMixin:
 
     def onSelectModel_(self, sender):
         self.app.set_ai_model_value(str(sender.representedObject()))
+
+    def onSelectAudioInput_(self, sender):
+        selected = str(sender.representedObject() or "")
+        if selected == "__auto__":
+            self.app.set_audio_input_value("", "")
+            return
+        selected = selected.strip()
+        if not selected:
+            return
+        device_name = ""
+        for item in self.app.list_audio_input_devices():
+            if str(item.get("uid") or "") == selected:
+                device_name = str(item.get("name") or "")
+                break
+        self.app.set_audio_input_value(selected, device_name)
 
     def onSelectPromptTemplate_(self, sender):
         template_id = str(sender.representedObject() or "")

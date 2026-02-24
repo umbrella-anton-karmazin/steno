@@ -39,6 +39,50 @@ class RecordingService:
         self._native_recording_ready = True
         return True
 
+    def _list_audio_inputs_native(self):
+        try:
+            from AVFoundation import AVCaptureDevice, AVMediaTypeAudio  # pylint: disable=import-outside-toplevel
+        except Exception:
+            return []
+
+        devices = []
+        try:
+            raw = AVCaptureDevice.devicesWithMediaType_(AVMediaTypeAudio) or []
+        except Exception:
+            raw = []
+        for device in raw:
+            try:
+                uid = str(device.uniqueID() or "").strip()
+            except Exception:
+                uid = ""
+            if not uid:
+                continue
+            try:
+                name = str(device.localizedName() or uid)
+            except Exception:
+                name = uid
+            try:
+                connected = bool(device.isConnected())
+            except Exception:
+                connected = True
+            devices.append({"uid": uid, "name": name, "connected": connected})
+        devices.sort(key=lambda x: (0 if x["connected"] else 1, x["name"].lower()))
+        return devices
+
+    def list_audio_input_devices(self):
+        if not self.has_pyobjc:
+            return []
+        return self._list_audio_inputs_native()
+
+    def resolve_selected_audio_input(self):
+        selected_uid = str(self.app.config.get("audio_input_uid") or "").strip()
+        if not selected_uid:
+            return None
+        for item in self.list_audio_input_devices():
+            if item.get("uid") == selected_uid:
+                return item
+        return None
+
     def record_switch(self, sender):
         if self.has_pyobjc and not self.app.config.get("permissions_onboarding_done", False):
             rumps.alert(tr("record.permissions_required_title"), tr("record.permissions_required_body"))
@@ -108,6 +152,10 @@ class RecordingService:
             # Получаем настройки качества
             quality_key = self.app.config.get("video_quality", "Medium")
             preset = VIDEO_QUALITY_PRESETS.get(quality_key, VIDEO_QUALITY_PRESETS["Medium"])
+            preset = dict(preset)
+            selected_uid = str(self.app.config.get("audio_input_uid") or "").strip()
+            if selected_uid:
+                preset["audio_input_uid"] = selected_uid
 
             # ВАЖНО: Инициализация рекордера с двумя URL и конфигом
             self.app.recorder = self._screen_recorder_cls.alloc().initWithOutputURLs_auxURL_videoConfig_(
