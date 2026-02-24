@@ -88,7 +88,19 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
-DMG_NAME="${DMG_NAME:-${APP_NAME}-${ARCH}.dmg}"
+APP_INFO_PLIST="${APP_PATH}/Contents/Info.plist"
+APP_VERSION="unknown"
+if [ -f "$APP_INFO_PLIST" ]; then
+  APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_INFO_PLIST" 2>/dev/null || true)"
+  if [ -z "$APP_VERSION" ]; then
+    APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_INFO_PLIST" 2>/dev/null || true)"
+  fi
+fi
+if [ -z "$APP_VERSION" ]; then
+  APP_VERSION="unknown"
+fi
+
+DMG_NAME="${DMG_NAME:-${APP_NAME}-${APP_VERSION}-${ARCH}.dmg}"
 APP_NAME="$APP_NAME" APP_PATH="$APP_PATH" DMG_NAME="$DMG_NAME" "$SCRIPT_DIR/build_dmg.sh"
 
 echo "--- Готово: ${DMG_NAME} ---"

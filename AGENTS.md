@@ -72,7 +72,7 @@ Steno — это desktop-приложение для macOS (PyObjC + rumps), к�
   - протокол: `<base>_protocol.txt`
 
 ## Запуск и сборка
-Запуск из исходников:
+Локальный запуск (dev):
 ```bash
 PYTHONPATH=src ./.venv/bin/python -m steno_app.app
 ```
@@ -82,9 +82,20 @@ PYTHONPATH=src ./.venv/bin/python -m steno_app.app
 python3 -m py_compile setup.py $(find src/steno_app -name '*.py' -print)
 ```
 
-Сборка (только по явному запросу):
+Сборка py2app (только по явному запросу):
 ```bash
 python3 setup.py py2app
+```
+
+Сборка по архитектурам + DMG (только по явному запросу):
+```bash
+./scripts/build_arch.sh arm64
+./scripts/build_arch.sh x86_64
+```
+
+Сборка DMG из готового `.app` (только по явному запросу):
+```bash
+APP_NAME=Steno APP_PATH=dist/Steno.app DMG_NAME=Steno.dmg ./scripts/build_dmg.sh
 ```
 
 ## Правила взаимодействия

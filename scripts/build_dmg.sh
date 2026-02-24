@@ -8,8 +8,43 @@ cd "$PROJECT_DIR"
 # Настройки путей
 APP_NAME="${APP_NAME:-Steno}"
 APP_PATH="${APP_PATH:-dist/${APP_NAME}.app}"
-DMG_NAME="${DMG_NAME:-${APP_NAME}.dmg}"
 BACKGROUND_PATH="${BACKGROUND_PATH:-src/steno_app/assets/install.tiff}"
+
+APP_INFO_PLIST="${APP_PATH}/Contents/Info.plist"
+APP_VERSION="unknown"
+if [ -f "$APP_INFO_PLIST" ]; then
+    APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_INFO_PLIST" 2>/dev/null || true)"
+    if [ -z "$APP_VERSION" ]; then
+        APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_INFO_PLIST" 2>/dev/null || true)"
+    fi
+fi
+if [ -z "$APP_VERSION" ]; then
+    APP_VERSION="unknown"
+fi
+
+APP_ARCH="${ARCH:-}"
+if [ -z "$APP_ARCH" ] && [ -d "$APP_PATH" ]; then
+    APP_EXECUTABLE="$APP_PATH/Contents/MacOS/$APP_NAME"
+    if [ -x "$APP_EXECUTABLE" ]; then
+        EXEC_ARCHS="$(lipo -archs "$APP_EXECUTABLE" 2>/dev/null || true)"
+        case "$EXEC_ARCHS" in
+            "arm64")
+                APP_ARCH="arm64"
+                ;;
+            "x86_64")
+                APP_ARCH="x86_64"
+                ;;
+            *"arm64"*x86_64*|*"x86_64"*arm64*)
+                APP_ARCH="universal2"
+                ;;
+        esac
+    fi
+fi
+if [ -z "$APP_ARCH" ]; then
+    APP_ARCH="unknown"
+fi
+
+DMG_NAME="${DMG_NAME:-${APP_NAME}-${APP_VERSION}-${APP_ARCH}.dmg}"
 
 echo "--- Начинаем сборку $APP_NAME ---"
 
